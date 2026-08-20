@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Offline field guide for migrating an exported Hyper-V virtual disk to VMware Workstation or Oracle VirtualBox." />
+  <title>MALWARE LAB // Hyper-V Migration Field Guide</title>
+  <style>
+/* MALWARE LAB // offline static guide */
+:root{
+  --bg:#050807;
+  --bg2:#08100d;
+  --panel:#0b1310;
+  --panel2:#0e1915;
+  --line:#1c3a2e;
+  --line2:#285842;
+  --text:#d8f6e5;
+  --muted:#84a696;
+  --green:#71ff9a;
+  --green2:#22d865;
+  --acid:#b8ff42;
+  --amber:#ffcf5a;
+  --red:#ff5d73;
+  --cyan:#4be7ff;
+  --shadow:0 18px 60px rgba(0,0,0,.38);
+  --mono:"Cascadia Code","JetBrains Mono","Fira Code","Courier New",monospace;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:
+  radial-gradient(circle at 80% 10%,rgba(34,216,101,.08),transparent 30%),
+  linear-gradient(180deg,var(--bg),#030504 75%);
+  color:var(--text);font-family:var(--sans);line-height:1.65;min-height:100vh
+}
+a{color:inherit}
+code,pre{font-family:var(--mono)}
+::selection{background:var(--green);color:#041008}
+.scanlines{position:fixed;inset:0;pointer-events:none;z-index:10;opacity:.12;background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(113,255,154,.08) 4px)}
+.grid-bg{position:fixed;inset:0;pointer-events:none;opacity:.25;background-image:linear-gradient(rgba(113,255,154,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(113,255,154,.035) 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,black,transparent 80%)}
+.shell{width:min(1180px,calc(100% - 40px));margin-inline:auto}
+.site-header{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:20px;
+  min-height:72px;padding:10px max(20px,calc((100vw - 1180px)/2));backdrop-filter:blur(18px);
+  background:rgba(5,8,7,.82);border-bottom:1px solid rgba(113,255,154,.16)
+}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.brand-mark{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--green2);color:var(--green);font:800 16px var(--mono);box-shadow:inset 0 0 20px rgba(113,255,154,.08),0 0 20px rgba(113,255,154,.08)}
+.brand strong,.brand small{display:block}
+.brand strong{font:800 13px var(--mono);letter-spacing:.14em;color:var(--green)}
+.brand small{font:600 9px var(--mono);letter-spacing:.15em;color:var(--muted)}
+.top-nav{display:flex;gap:22px}
+.top-nav a{font:700 10px var(--mono);letter-spacing:.15em;text-decoration:none;color:var(--muted)}
+.top-nav a:hover{color:var(--green)}
+.status-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);font:700 9px var(--mono);letter-spacing:.12em;color:var(--muted)}
+.status-chip span{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:50px;align-items:center;padding:90px 0 70px}
+.eyebrow{margin:0 0 10px;font:800 10px var(--mono);letter-spacing:.2em;color:var(--green2);text-transform:uppercase}
+.eyebrow.danger{color:var(--red)}
+h1,h2,h3,p{margin-top:0}
+h1{margin:0;font-size:clamp(48px,7vw,88px);line-height:.95;letter-spacing:-.055em}
+h1 span{color:var(--green)}
+.lede{max-width:760px;margin:26px 0 0;color:#a8c6b7;font-size:18px}
+.hero-actions{display:flex;gap:12px;margin:30px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 17px;border:1px solid var(--line2);text-decoration:none;font:800 10px var(--mono);letter-spacing:.16em}
+.btn.primary{background:var(--green);color:#041008;border-color:var(--green)}
+.btn.primary:hover{box-shadow:0 0 30px rgba(113,255,154,.22)}
+.btn.ghost:hover{border-color:var(--green);color:var(--green)}
+.mini-terminal{margin-top:34px;border:1px solid var(--line);background:#040806;box-shadow:var(--shadow)}
+.terminal-bar{display:flex;align-items:center;gap:6px;padding:10px;border-bottom:1px solid var(--line);background:#09110d}
+.terminal-bar i{width:7px;height:7px;border-radius:50%;background:var(--line2)}
+.terminal-bar span{margin-left:8px;font:700 9px var(--mono);color:var(--muted)}
+.mini-terminal pre{margin:0;padding:18px;overflow:auto;color:#9feebb;font-size:12px}
+.hero-panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(13,27,21,.9),rgba(5,11,8,.9));box-shadow:var(--shadow);padding:28px}
+.radar{position:relative;aspect-ratio:1;border:1px solid var(--line2);overflow:hidden;background:radial-gradient(circle,rgba(113,255,154,.08),transparent 62%)}
+.radar:before,.radar:after{content:"";position:absolute;background:rgba(113,255,154,.13)}
+.radar:before{left:50%;top:0;bottom:0;width:1px}.radar:after{top:50%;left:0;right:0;height:1px}
+.radar-ring{position:absolute;inset:50%;border:1px solid rgba(113,255,154,.18);border-radius:50%;transform:translate(-50%,-50%)}
+.r1{width:28%;height:28%}.r2{width:55%;height:55%}.r3{width:82%;height:82%}
+.radar-line{position:absolute;left:50%;top:50%;width:42%;height:1px;background:linear-gradient(90deg,var(--green),transparent);transform-origin:left;animation:sweep 7s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.radar-core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:70px;height:70px;border-radius:50%;background:#08130d;border:1px solid var(--green);color:var(--green);font:900 16px var(--mono);box-shadow:0 0 30px rgba(113,255,154,.13)}
+.node{position:absolute;padding:5px 7px;border:1px solid var(--line2);background:#06100b;color:var(--green);font:700 9px var(--mono)}
+.n1{top:20%;right:14%}.n2{bottom:18%;left:12%}.n3{top:22%;left:10%}.n4{right:12%;bottom:20%}
+.panel-meta{display:grid;grid-template-columns:1fr;gap:12px;margin-top:18px}
+.panel-meta div{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:10px}
+.panel-meta small{font:700 9px var(--mono);letter-spacing:.12em;color:var(--muted)}
+.panel-meta strong{font-size:13px}
+.alert-band{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:start;padding:28px;border:1px solid rgba(255,93,115,.45);background:linear-gradient(90deg,rgba(255,93,115,.08),rgba(255,93,115,.02))}
+.alert-icon{display:grid;place-items:center;width:52px;height:52px;border:1px solid var(--red);color:var(--red);font:900 24px var(--mono);box-shadow:0 0 28px rgba(255,93,115,.12)}
+.alert-band h2{margin-bottom:6px;font-size:24px}
+.alert-band p:last-child{margin-bottom:0;color:#c7aaaF}
+.alert-band code{color:#ffd2d8}
+.section{padding:90px 0}
+.section-head{max-width:760px;margin-bottom:34px}
+.section-head h2{margin:0 0 10px;font-size:clamp(34px,5vw,54px);line-height:1.05;letter-spacing:-.04em}
+.section-head p:last-child{color:var(--muted);margin-bottom:0}
+.cards{display:grid;gap:16px}
+.cards.three{grid-template-columns:repeat(3,1fr)}
+.cards.four{grid-template-columns:repeat(4,1fr)}
+.card{position:relative;padding:24px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(10,20,16,.92),rgba(6,12,9,.92));overflow:hidden}
+.card:after{content:"";position:absolute;left:0;bottom:0;width:56px;height:2px;background:var(--green)}
+.card-index{font:900 10px var(--mono);color:var(--green2);letter-spacing:.12em}
+.card h3{margin:16px 0 8px;font-size:20px}
+.card p{color:var(--muted);font-size:14px}
+.file-tree{display:grid;gap:5px;padding:14px;background:#030604;border:1px solid #16271f}
+.file-tree code{font-size:11px;color:#9bdab3}
+.tag-row{display:flex;flex-wrap:wrap;gap:7px}
+.tag-row span,.footer-tags span{padding:5px 8px;border:1px solid var(--line2);font:700 8px var(--mono);letter-spacing:.14em;color:var(--muted)}
+.compact-table{width:100%;border-collapse:collapse;font:700 11px var(--mono)}
+.compact-table th,.compact-table td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+.compact-table th{color:var(--muted)}.compact-table td:last-child{color:var(--green)}
+.command-card{display:grid;grid-template-columns:.8fr 1.2fr;gap:24px;margin-top:18px;padding:24px;border:1px solid var(--line);background:#07100c}
+.command-card p{color:var(--muted);margin-bottom:0}
+.lab-safety{margin-top:18px;padding:18px 20px;border-left:3px solid var(--amber);background:rgba(255,207,90,.06)}
+.lab-safety strong{color:var(--amber);font:800 11px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.lab-safety p{margin:6px 0 0;color:#c9c1a2;font-size:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);margin-bottom:16px}
+.tab{padding:18px;border:0;background:#07100c;color:var(--muted);font:800 12px var(--mono);letter-spacing:.08em;cursor:pointer}
+.tab+ .tab{border-left:1px solid var(--line)}
+.tab span{color:var(--green2);margin-right:8px}
+.tab.active{background:var(--green);color:#041008}
+.tab.active span{color:#07140b}
+.tab-panel{border:1px solid var(--line);background:rgba(6,12,9,.66)}
+.path-banner{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:24px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,rgba(113,255,154,.06),transparent)}
+.path-banner h3{margin:0;font-size:22px}
+.path-chain{display:flex;align-items:center;gap:8px;font:800 10px var(--mono)}
+.path-chain span{padding:7px 9px;border:1px solid var(--line2);color:var(--green)}
+.path-chain b{color:var(--muted)}
+.steps{padding:0 24px}
+.step{display:grid;grid-template-columns:76px 1fr;gap:18px;padding:30px 0;border-bottom:1px solid var(--line)}
+.step:last-child{border-bottom:0}
+.step.emphasis{position:relative}
+.step.emphasis:before{content:"";position:absolute;left:-24px;top:0;bottom:0;width:3px;background:var(--green)}
+.step-num{font:900 18px var(--mono);color:var(--green2)}
+.step-body{min-width:0}
+.step-title{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.step-title h3{margin:0 0 10px;font-size:21px}
+.step-title label{display:flex;align-items:center;gap:6px;white-space:nowrap;font:700 8px var(--mono);letter-spacing:.1em;color:var(--muted)}
+.step-title input{accent-color:var(--green)}
+.step p,.step li{color:#a7c1b4;font-size:14px}
+.step ol,.step ul{padding-left:20px}
+.code-wrap{position:relative;margin:14px 0;border:1px solid #173025;background:#020403;overflow:hidden}
+.code-wrap pre{margin:0;padding:17px 62px 17px 17px;overflow:auto;color:#aaf3c1;font-size:12px}
+.copy-btn{position:absolute;right:8px;top:8px;z-index:2;border:1px solid var(--line2);background:#08120d;color:var(--green);font:800 8px var(--mono);letter-spacing:.12em;padding:6px 8px;cursor:pointer}
+.copy-btn:hover{background:var(--green);color:#041008}
+.hint{font:12px var(--mono)!important;color:#769e8a!important}
+.note{padding:14px;border-left:2px solid var(--cyan);background:rgba(75,231,255,.05);color:#b6dbe0;font-size:13px}
+.note strong{color:var(--cyan)}
+.flag-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding-left:0!important}
+.flag-list li{padding:7px 9px;border:1px solid var(--line);font:700 10px var(--mono)}
+.config-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.config-grid div{padding:12px;border:1px solid var(--line);background:#050a07}
+.config-grid small,.config-grid strong{display:block}
+.config-grid small{font:700 8px var(--mono);letter-spacing:.12em;color:var(--muted)}
+.config-grid strong{font-size:13px;margin-top:4px}
+.firmware-map{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.firmware-map div{display:flex;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--line)}
+.firmware-map span{font:800 9px var(--mono);color:var(--muted)}
+.firmware-map b{color:var(--green)}
+.flow-card{padding:22px 24px;border-top:1px solid var(--line);background:#050b08}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.flow span{padding:7px 9px;border:1px solid var(--line);font:700 9px var(--mono);color:#a8c8b8}
+.flow b{color:var(--green)}
+.trouble-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+details{border:1px solid var(--line);background:#07100c}
+summary{padding:17px 18px;cursor:pointer;font-weight:800;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";float:right;color:var(--green);font:900 16px var(--mono)}
+details[open] summary:after{content:"−"}
+summary span{display:inline-block;margin-right:8px;color:var(--green);font:800 9px var(--mono);letter-spacing:.1em}
+details>div{padding:0 18px 18px;color:var(--muted)}
+details p:last-child,details ol:last-child{margin-bottom:0}
+.file-role{min-height:170px}
+.file-role strong{display:block;color:var(--green);font:900 30px var(--mono)}
+.file-role span{display:block;margin-top:10px;font-weight:800}
+.file-role em{display:block;margin-top:9px;color:var(--muted);font-size:12px;font-style:normal}
+.site-footer{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:34px max(20px,calc((100vw - 1180px)/2));border-top:1px solid var(--line);background:#030604}
+.site-footer strong{font:800 10px var(--mono);letter-spacing:.14em;color:var(--green)}
+.site-footer p{margin:6px 0 0;color:var(--muted);font-size:12px}
+.footer-tags{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.toast{position:fixed;right:20px;bottom:20px;z-index:50;transform:translateY(20px);opacity:0;padding:10px 13px;border:1px solid var(--green);background:#07110b;color:var(--green);font:800 9px var(--mono);letter-spacing:.1em;pointer-events:none;transition:.2s ease}
+.toast.show{transform:none;opacity:1}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;padding-top:60px}.hero-panel{max-width:560px}
+  .cards.three,.cards.four{grid-template-columns:1fr 1fr}
+  .command-card{grid-template-columns:1fr}
+  .top-nav{display:none}
+  .trouble-grid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .shell{width:min(100% - 24px,1180px)}
+  .site-header{padding-inline:12px}.status-chip{display:none}
+  .hero{padding:48px 0}.hero h1{font-size:48px}
+  .hero-panel{padding:16px}
+  .cards.three,.cards.four{grid-template-columns:1fr}
+  .tabs{grid-template-columns:1fr}.tab+.tab{border-left:0;border-top:1px solid var(--line)}
+  .path-banner{align-items:flex-start;flex-direction:column}.path-chain{flex-wrap:wrap}
+  .steps{padding:0 14px}.step{grid-template-columns:46px 1fr}.step.emphasis:before{left:-14px}
+  .step-title{flex-direction:column;gap:4px}.config-grid{grid-template-columns:1fr}.firmware-map{grid-template-columns:1fr}
+  .alert-band{grid-template-columns:1fr}.alert-icon{width:44px;height:44px}
+  .site-footer{align-items:flex-start;flex-direction:column}.footer-tags{justify-content:flex-start}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.radar-line{animation:none}}
+
+
+/* downloads + course lab profile */
+.downloads-section{padding-top:72px}
+.download-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.download-card{
+  display:grid;grid-template-columns:58px 1fr;gap:16px;align-items:start;
+  padding:22px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(10,20,16,.95),rgba(5,10,8,.95))
+}
+.download-card.lab-file{border-color:rgba(255,93,115,.34);background:linear-gradient(180deg,rgba(255,93,115,.055),rgba(7,10,8,.95))}
+.download-icon{display:grid;place-items:center;width:54px;height:54px;border:1px solid var(--line2);color:var(--green);font:900 12px var(--mono);letter-spacing:.08em}
+.download-card small{font:800 8px var(--mono);letter-spacing:.15em;color:var(--muted)}
+.download-card h3{margin:3px 0 5px;font-size:19px}
+.download-card p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.download-card .download-btn,.download-card .download-actions{grid-column:2}
+.download-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.download-btn,.inline-download{
+  display:inline-flex;align-items:center;justify-content:center;width:max-content;
+  padding:9px 11px;border:1px solid var(--green2);background:rgba(113,255,154,.06);
+  color:var(--green);text-decoration:none;font:800 9px var(--mono);letter-spacing:.1em
+}
+.download-btn:hover,.inline-download:hover{background:var(--green);color:#041008}
+.danger-btn{border-color:var(--red);color:#ff8b9b;background:rgba(255,93,115,.06)}
+.danger-btn:hover{background:var(--red);color:#170308}
+.text-link{color:var(--muted);font:700 9px var(--mono);text-underline-offset:3px}
+.text-link:hover{color:var(--green)}
+.required-profile{margin-top:16px;padding:24px;border:1px solid rgba(255,93,115,.45);background:linear-gradient(90deg,rgba(255,93,115,.07),rgba(113,255,154,.025))}
+.profile-head{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:18px}
+.profile-head h3{margin:0;font-size:24px}
+.lock-chip{padding:7px 9px;border:1px solid var(--red);color:var(--red);font:800 8px var(--mono);letter-spacing:.12em}
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.profile-grid div{padding:14px;border:1px solid var(--line);background:#050a07}
+.profile-grid small,.profile-grid strong{display:block}
+.profile-grid small{color:var(--muted);font:800 8px var(--mono);letter-spacing:.12em}
+.profile-grid strong{margin-top:4px;font-size:14px}
+.profile-danger{border-color:rgba(255,93,115,.55)!important;background:rgba(255,93,115,.07)!important}
+.profile-danger strong{color:var(--red);font-family:var(--mono);letter-spacing:.08em}
+.mini-checks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.mini-checks span{padding:10px;border:1px solid var(--line);font:800 10px var(--mono);color:#9bdab3}
+.mini-checks .red-check{border-color:rgba(255,93,115,.5);color:var(--red)}
+.lab-safety.strict{border-left-color:var(--red);background:rgba(255,93,115,.06)}
+.lab-safety.strict strong,.lab-safety.strict b{color:var(--red)}
+.danger-config{border-color:rgba(255,93,115,.55)!important;background:rgba(255,93,115,.07)!important}
+.danger-config strong{color:var(--red)}
+.single-required{grid-template-columns:1fr;max-width:440px}
+.author-credit{opacity:.38;font:700 9px var(--mono);letter-spacing:.08em;margin-left:5px}
+@media (max-width:760px){
+  .download-grid{grid-template-columns:1fr}
+  .profile-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:520px){
+  .download-card{grid-template-columns:46px 1fr;padding:16px}
+  .download-icon{width:42px;height:42px}
+  .profile-grid,.mini-checks{grid-template-columns:1fr}
+  .profile-head{align-items:flex-start;flex-direction:column}
+}
+
+</style>
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Migration guide home">
+      <span class="brand-mark">[M]</span>
+      <span>
+        <strong>MALWARE LAB</strong>
+        <small>VM MIGRATION FIELD GUIDE</small>
+      </span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a href="#downloads">DOWNLOADS</a>
+      <a href="#common">PRE-FLIGHT</a>
+      <a href="#migration">MIGRATION</a>
+      <a href="#troubleshooting">TROUBLESHOOT</a>
+    </nav>
+    <div class="status-chip"><span></span> OFFLINE GUIDE</div>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow">MALWARE ANALYSIS // VIRTUALIZATION</p>
+        <h1>Hyper-V <span>→</span> VMware<br />or VirtualBox</h1>
+        <p class="lede">
+          Convert the exported Hyper-V virtual disk, rebuild the VM configuration in the target hypervisor,
+          match the original firmware mode, and verify the migrated Windows guest.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#downloads">GET LAB FILES</a>
+          <a class="btn ghost" href="#migration">START MIGRATION</a>
+        </div>
+        <div class="mini-terminal" aria-label="Migration summary">
+          <div class="terminal-bar"><i></i><i></i><i></i><span>migration-chain.txt</span></div>
+          <pre><code>HYPER-V EXPORT
+  └─ Virtual Hard Disks\MyVM.vhd
+       ├─ VMware    → .vmdk → new .vmx
+       └─ VirtualBox → .vdi → new VirtualBox VM</code></pre>
+        </div>
+      </div>
+      <div class="hero-panel">
+        <div class="radar">
+          <div class="radar-ring r1"></div><div class="radar-ring r2"></div><div class="radar-ring r3"></div>
+          <div class="radar-line"></div>
+          <div class="radar-core">VHD</div>
+          <span class="node n1">VMDK</span>
+          <span class="node n2">VDI</span>
+          <span class="node n3">UEFI</span>
+          <span class="node n4">BIOS</span>
+        </div>
+        <div class="panel-meta">
+          <div><small>SOURCE</small><strong>Hyper-V export</strong></div>
+          <div><small>TARGET A</small><strong>VMware Workstation</strong></div>
+          <div><small>TARGET B</small><strong>Oracle VirtualBox</strong></div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="downloads" class="section shell downloads-section">
+      <div class="section-head">
+        <p class="eyebrow">LAB RESOURCES</p>
+        <h2>Download what you need first</h2>
+        <p>Use the buttons below before starting the conversion. VMware requires <code>qemu-img</code> for the VHD → VMDK path. VirtualBox requires a complete installation that includes <code>VBoxManage.exe</code>.</p>
+      </div>
+
+      <div class="download-grid">
+        <article class="download-card">
+          <div class="download-icon">VM</div>
+          <div>
+            <small>HYPERVISOR</small>
+            <h3>VMware Workstation</h3>
+            <p>Download VMware Workstation for the VMware migration path.</p>
+          </div>
+          <a class="download-btn" href="https://www.techspot.com/downloads/189-vmware-workstation-for-windows.html" target="_blank" rel="noopener noreferrer">DOWNLOAD VMWARE ↗</a>
+        </article>
+
+        <article class="download-card">
+          <div class="download-icon">Q</div>
+          <div>
+            <small>CONVERSION TOOL</small>
+            <h3>qemu-img for Windows</h3>
+            <p>Required to convert the exported Hyper-V <code>.vhd</code> into a VMware <code>.vmdk</code>.</p>
+          </div>
+          <div class="download-actions">
+            <a class="download-btn" href="https://cloudbase.it/downloads/qemu-img-win-x64-2_3_0.zip" target="_blank" rel="noopener noreferrer">DOWNLOAD QEMU-IMG ↗</a>
+            <a class="text-link" href="https://cloudbase.it/qemu-img-windows/" target="_blank" rel="noopener noreferrer">Download page</a>
+          </div>
+        </article>
+
+        <article class="download-card">
+          <div class="download-icon">VB</div>
+          <div>
+            <small>HYPERVISOR</small>
+            <h3>Oracle VirtualBox</h3>
+            <p>Install the full VirtualBox package. If <code>VBoxManage.exe</code> is missing, reinstall or repair VirtualBox.</p>
+          </div>
+          <div class="download-actions">
+            <a class="download-btn" href="https://download.virtualbox.org/virtualbox/7.2.14/VirtualBox-7.2.14-174565-Win.exe" target="_blank" rel="noopener noreferrer">DOWNLOAD VIRTUALBOX ↗</a>
+            <a class="text-link" href="https://www.oracle.com/virtualization/technologies/vm/downloads/virtualbox-downloads.html" target="_blank" rel="noopener noreferrer">Official downloads page</a>
+          </div>
+        </article>
+
+        <article class="download-card lab-file">
+          <div class="download-icon">LAB</div>
+          <div>
+            <small>COURSE IMAGE</small>
+            <h3>Malware Lab Virtual Machine</h3>
+            <p>Download the provided lab VM archive before following the VMware or VirtualBox path.</p>
+          </div>
+          <a class="download-btn danger-btn" href="https://liveswinburneeduau-my.sharepoint.com/:u:/r/personal/105507551_student_swin_edu_au/Documents/Files/VM%20virtualbox/Malware%20Lab%20VM.zip?d=wb145481b497c45878ef2f1fe14036988&csf=1&web=1&e=BJyIbZ" target="_blank" rel="noopener noreferrer">DOWNLOAD LAB VM ↗</a>
+        </article>
+      </div>
+
+      <div class="required-profile">
+        <div class="profile-head">
+          <div>
+            <p class="eyebrow danger">REQUIRED LAB PROFILE</p>
+            <h3>Use these settings when creating the VM</h3>
+          </div>
+          <span class="lock-chip">DO NOT IMPROVISE</span>
+        </div>
+        <div class="profile-grid">
+          <div><small>GUEST OS</small><strong>Windows</strong></div>
+          <div><small>VERSION</small><strong>Windows 10 x64</strong></div>
+          <div><small>FIRMWARE</small><strong>BIOS</strong></div>
+          <div><small>HARD DISK</small><strong>Use existing drive</strong></div>
+          <div class="profile-danger"><small>NETWORK ADAPTER</small><strong>NO NETWORK</strong></div>
+          <div><small>3D ACCELERATION</small><strong>Disabled</strong></div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="critical-warning" class="alert-band shell">
+      <div class="alert-icon">!</div>
+      <div>
+        <p class="eyebrow danger">CRITICAL CHECKPOINT WARNING</p>
+        <h2>If you see <code>.avhd</code> or <code>.avhdx</code>, stop before conversion.</h2>
+        <p>
+          Those files may be Hyper-V checkpoint/differencing disks. Converting only the base VHD can give you
+          an older VM state. Resolve the disk chain first.
+        </p>
+      </div>
+    </section>
+
+    <section id="common" class="section shell">
+      <div class="section-head">
+        <p class="eyebrow">PHASE 00</p>
+        <h2>Pre-flight checks</h2>
+        <p>Do these once before choosing VMware or VirtualBox.</p>
+      </div>
+
+      <div class="cards three">
+        <article class="card">
+          <div class="card-index">01</div>
+          <h3>Understand the export</h3>
+          <p>The target hypervisor does not reuse Hyper-V's VM configuration. The important migration asset is the virtual disk.</p>
+          <div class="file-tree">
+            <code>MyVM\</code>
+            <code>├─ Virtual Machines\*.vmcx</code>
+            <code>├─ Virtual Hard Disks\MyVM.vhd</code>
+            <code>└─ Snapshots\</code>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-index">02</div>
+          <h3>Preserve the original</h3>
+          <p>Keep the exported VHD untouched. Work from a copy and do not convert a disk that is currently in use by a running VM.</p>
+          <div class="tag-row"><span>BACKUP</span><span>OFFLINE</span><span>VERIFY</span></div>
+        </article>
+        <article class="card">
+          <div class="card-index">03</div>
+          <h3>Use the lab profile</h3>
+          <p>This course VM has a fixed setup profile. When rebuilding it in either hypervisor, use the required values below.</p>
+          <table class="compact-table">
+            <tbody>
+              <tr><td>Guest</td><td>Windows 10 x64</td></tr>
+              <tr><td>Firmware</td><td>BIOS</td></tr>
+              <tr><td>Network</td><td>DISABLED</td></tr>
+              <tr><td>3D</td><td>DISABLED</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+
+      <div class="command-card">
+        <div>
+          <p class="eyebrow">LAB CONFIGURATION CHECK</p>
+          <h3>Before first boot</h3>
+          <p>Verify all six required settings. The most important safety setting is that the VM has no usable network connection.</p>
+        </div>
+        <div class="mini-checks">
+          <span>✓ Windows</span>
+          <span>✓ Windows 10 x64</span>
+          <span>✓ BIOS</span>
+          <span>✓ Existing disk</span>
+          <span class="red-check">✓ NO NETWORK</span>
+          <span>✓ 3D disabled</span>
+        </div>
+      </div>
+
+      <div class="lab-safety strict">
+        <strong>Malware-lab network rule</strong>
+        <p>
+          This lab VM must have <b>NO NETWORK</b>. Do not use NAT, Bridged, Host-only, or any other connected adapter.
+          Disable/remove the virtual network adapter before booting the malware-analysis VM.
+        </p>
+      </div>
+    </section>
+
+    <section id="migration" class="section shell">
+      <div class="section-head">
+        <p class="eyebrow">PHASE 01</p>
+        <h2>Choose your target hypervisor</h2>
+        <p>Each path starts from the exported <code>.vhd</code> and creates a new target-specific VM configuration.</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Migration target">
+        <button class="tab active" id="tab-vmware" role="tab" aria-selected="true" aria-controls="panel-vmware" data-tab="vmware">
+          <span>01</span> VMware Workstation
+        </button>
+        <button class="tab" id="tab-vbox" role="tab" aria-selected="false" aria-controls="panel-vbox" data-tab="vbox">
+          <span>02</span> VirtualBox
+        </button>
+      </div>
+
+      <div class="tab-panel active" id="panel-vmware" role="tabpanel" aria-labelledby="tab-vmware">
+        <div class="path-banner">
+          <div>
+            <p class="eyebrow">PATH A</p>
+            <h3>Hyper-V VHD → VMware VMDK</h3>
+          </div>
+          <div class="path-chain"><span>.VHD</span><b>→</b><span>.VMDK</span><b>→</b><span>.VMX</span></div>
+        </div>
+
+        <div class="steps">
+          <article class="step" data-step="vmw-1">
+            <div class="step-num">01</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Inspect the exported disk</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Confirm there is no unresolved <code>.avhd</code>/<code>.avhdx</code> chain, then make a backup of the VHD.</p>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='qemu-img.exe info "D:\HyperV-Export\Virtual Hard Disks\MyVM.vhd"'>COPY</button>
+                <pre><code>qemu-img.exe info "D:\HyperV-Export\Virtual Hard Disks\MyVM.vhd"</code></pre>
+              </div>
+              <p class="hint">QEMU may report the VHD source format as <code>vpc</code>.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-2">
+            <div class="step-num">02</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Download and test <code>qemu-img.exe</code></h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>The VMware workflow uses <code>qemu-img</code> to convert VHD → VMDK. Download it first, extract the archive, then test the executable.</p>
+              <p><a class="inline-download" href="https://cloudbase.it/downloads/qemu-img-win-x64-2_3_0.zip" target="_blank" rel="noopener noreferrer">DOWNLOAD QEMU-IMG FOR WINDOWS ↗</a> <a class="text-link" href="https://cloudbase.it/qemu-img-windows/" target="_blank" rel="noopener noreferrer">Cloudbase download page</a></p>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='qemu-img.exe --version'>COPY</button>
+                <pre><code>qemu-img.exe --version</code></pre>
+              </div>
+              <p class="hint">If it is not on PATH, run it with the full executable path.</p>
+            </div>
+          </article>
+
+          <article class="step emphasis" data-step="vmw-3">
+            <div class="step-num">03</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Convert VHD → VMDK</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='qemu-img.exe convert -p -f vpc -O vmdk "D:\HyperV-Export\Virtual Hard Disks\MyVM.vhd" "D:\VMware\MyVM\MyVM_vmware.vmdk"'>COPY</button>
+                <pre><code>qemu-img.exe convert -p -f vpc -O vmdk "D:\HyperV-Export\Virtual Hard Disks\MyVM.vhd" "D:\VMware\MyVM\MyVM_vmware.vmdk"</code></pre>
+              </div>
+              <ul class="flag-list">
+                <li><code>-p</code> show progress</li>
+                <li><code>-f vpc</code> source is VHD</li>
+                <li><code>-O vmdk</code> output is VMDK</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-4">
+            <div class="step-num">04</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Verify the converted VMDK</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='qemu-img.exe info "D:\VMware\MyVM\MyVM_vmware.vmdk"'>COPY</button>
+                <pre><code>qemu-img.exe info "D:\VMware\MyVM\MyVM_vmware.vmdk"</code></pre>
+              </div>
+              <p>Confirm QEMU recognizes the new disk as <code>vmdk</code> before building the VM.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-5">
+            <div class="step-num">05</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Create a new VMware VM</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <ol>
+                <li>Open <strong>VMware Workstation</strong> → <strong>File → New Virtual Machine</strong>.</li>
+                <li>Select <strong>Custom (advanced)</strong>.</li>
+                <li>Choose <strong>I will install the operating system later</strong>.</li>
+                <li>Guest operating system: <strong>Windows</strong>.</li>
+                <li>Version: <strong>Windows 10 x64</strong>.</li>
+                <li>Name the VM and choose a folder with enough free space.</li>
+              </ol>
+              <div class="note"><strong>Do not double-click the VMDK.</strong> A VMDK is the virtual disk. VMware opens the VM through the generated <code>.vmx</code> configuration.</div>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-6">
+            <div class="step-num">06</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Set CPU, RAM and disable networking</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Start with approximately the same CPU count and RAM as the original VM. For this malware-analysis lab, networking must be disabled.</p>
+              <div class="config-grid">
+                <div><small>CPU</small><strong>≈ original vCPU count</strong></div>
+                <div><small>RAM</small><strong>≈ original allocation</strong></div>
+                <div class="danger-config"><small>NETWORK</small><strong>NO NETWORK</strong></div>
+              </div>
+              <p class="hint">In VMware, remove the network adapter or ensure it is disconnected before first boot.</p>
+            </div>
+          </article>
+
+          <article class="step emphasis" data-step="vmw-7">
+            <div class="step-num">07</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Use the existing virtual disk</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <ol>
+                <li>On <strong>Select a Disk</strong>, choose <strong>Use an existing virtual disk</strong>.</li>
+                <li>Browse to <code>MyVM_vmware.vmdk</code>.</li>
+                <li>If asked whether to keep or convert the disk format, choose <strong>Keep Existing Format</strong>.</li>
+                <li>Finish the wizard. VMware creates the <code>.vmx</code>.</li>
+              </ol>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-8">
+            <div class="step-num">08</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Set firmware to BIOS</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>For this lab image, set the VMware firmware type to <strong>BIOS</strong>.</p>
+              <div class="firmware-map single-required">
+                <div><span>LAB FIRMWARE</span><b>BIOS</b></div>
+              </div>
+              <p class="hint">Do not switch this lab VM to UEFI/EFI unless your instructor provides different settings.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-9">
+            <div class="step-num">09</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Check disk, display and boot settings</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Confirm the converted VMDK is attached under <strong>VM → Settings → Hard Disk</strong> and that the hard disk is available as a boot device.</p>
+              <p>Then open <strong>Display</strong> settings and <strong>disable 3D acceleration</strong>.</p>
+              <div class="note"><strong>Required lab setting:</strong> 3D acceleration must be off before boot.</div>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-10">
+            <div class="step-num">10</div>
+            <div class="step-body">
+              <div class="step-title"><h3>First boot and guest integration</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>The first Windows boot can take longer because the guest sees different virtual hardware. Let device detection finish.</p>
+              <ol>
+                <li>Install <strong>VMware Tools</strong>.</li>
+                <li>Restart Windows.</li>
+                <li>Check Device Manager for unknown devices or warning icons.</li>
+                <li>Verify networking and Windows activation status.</li>
+              </ol>
+            </div>
+          </article>
+
+          <article class="step" data-step="vmw-11">
+            <div class="step-num">11</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Retain the source until validation is complete</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Keep the original Hyper-V export, converted VMDK, and working VMware VM until you have verified boot, files, apps, network, services, and activation.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="flow-card">
+          <p class="eyebrow">VMWARE CHAIN</p>
+          <div class="flow">
+            <span>Hyper-V export</span><b>→</b><span>check checkpoints</span><b>→</b><span>qemu-img</span><b>→</b><span>VMDK</span><b>→</b><span>new VMware VM</span><b>→</b><span>BIOS</span><b>→</b><span>NO NETWORK</span><b>→</b><span>3D OFF</span><b>→</b><span>VMX</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-vbox" role="tabpanel" aria-labelledby="tab-vbox" hidden>
+        <div class="path-banner">
+          <div>
+            <p class="eyebrow">PATH B</p>
+            <h3>Hyper-V VHD → VirtualBox VDI</h3>
+          </div>
+          <div class="path-chain"><span>.VHD</span><b>→</b><span>.VDI</span><b>→</b><span>VirtualBox VM</span></div>
+        </div>
+
+        <div class="steps">
+          <article class="step" data-step="vbx-1">
+            <div class="step-num">01</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Check the export and checkpoint state</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Locate <code>Virtual Hard Disks\MyVM.vhd</code>. If any <code>.avhd</code>/<code>.avhdx</code> files exist, stop until the current disk state is identified.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-2">
+            <div class="step-num">02</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Back up the VHD</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Leave the original export untouched and create a separate working destination such as <code>D:\VirtualBox\MyVM\</code>.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-3">
+            <div class="step-num">03</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Verify <code>VBoxManage.exe</code> — reinstall if missing</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>On Windows, <code>VBoxManage.exe</code> should be installed with the main VirtualBox application.</p>
+              <div class="note"><strong>If VBoxManage.exe is missing:</strong> repair or reinstall the full VirtualBox package. Do not download <code>VBoxManage.exe</code> by itself.</div>
+              <p><a class="inline-download" href="https://download.virtualbox.org/virtualbox/7.2.14/VirtualBox-7.2.14-174565-Win.exe" target="_blank" rel="noopener noreferrer">DOWNLOAD VIRTUALBOX FOR WINDOWS ↗</a> <a class="text-link" href="https://www.oracle.com/virtualization/technologies/vm/downloads/virtualbox-downloads.html" target="_blank" rel="noopener noreferrer">Official Oracle downloads</a></p>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version'>COPY</button>
+                <pre><code>&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version</code></pre>
+              </div>
+              <p class="hint">If <code>VirtualBox.exe</code> exists but <code>VBoxManage.exe</code> is missing, the guide recommends repairing/reinstalling VirtualBox rather than downloading the EXE separately.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-4">
+            <div class="step-num">04</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Verify the VHD path</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='Test-Path "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd"'>COPY</button>
+                <pre><code>Test-Path "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd"</code></pre>
+              </div>
+              <p>You want <code>True</code>. Paths containing spaces must remain quoted.</p>
+            </div>
+          </article>
+
+          <article class="step emphasis" data-step="vbx-5">
+            <div class="step-num">05</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Convert VHD → VDI</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clonemedium disk "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" "D:\VirtualBox\MyVM\MyVM.vdi" --format VDI'>COPY</button>
+                <pre><code>&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clonemedium disk `
+  "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" `
+  "D:\VirtualBox\MyVM\MyVM.vdi" --format VDI</code></pre>
+              </div>
+              <p class="hint">The source PDF wraps the command across lines; PowerShell backticks continue the command onto the next line.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-6">
+            <div class="step-num">06</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Verify the new VDI</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='Test-Path "D:\VirtualBox\MyVM\MyVM.vdi"'>COPY</button>
+                <pre><code>Test-Path "D:\VirtualBox\MyVM\MyVM.vdi"</code></pre>
+              </div>
+              <div class="code-wrap">
+                <button class="copy-btn" data-copy='Get-Item "D:\VirtualBox\MyVM\MyVM.vdi" | Select-Object Name,Length,FullName'>COPY</button>
+                <pre><code>Get-Item "D:\VirtualBox\MyVM\MyVM.vdi" |
+  Select-Object Name,Length,FullName</code></pre>
+              </div>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-7">
+            <div class="step-num">07</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Create a new VirtualBox VM</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <ol>
+                <li>Open <strong>VirtualBox</strong> and click <strong>New</strong>.</li>
+                <li>Guest OS: <strong>Windows</strong>.</li>
+                <li>Version: <strong>Windows 10 (64-bit)</strong>.</li>
+                <li>Do <strong>not</strong> install Windows again.</li>
+                <li>Set approximately the same RAM and CPU allocation as the original VM.</li>
+              </ol>
+            </div>
+          </article>
+
+          <article class="step emphasis" data-step="vbx-8">
+            <div class="step-num">08</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Attach the existing VDI</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>When prompted for a virtual hard disk, choose <strong>Use an Existing Virtual Hard Disk File</strong> and select your <code>MyVM.vdi</code>.</p>
+              <p>If the VM already exists: <strong>Settings → Storage → controller → Add Hard Disk → Existing Disk</strong>.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-9">
+            <div class="step-num">09</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Use BIOS firmware for the lab VM</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>For this lab image, use <strong>BIOS</strong>. In VirtualBox, leave <strong>Enable EFI</strong> turned off.</p>
+              <div class="firmware-map single-required">
+                <div><span>LAB FIRMWARE</span><b>BIOS / EFI OFF</b></div>
+              </div>
+              <p class="hint">The lab profile overrides the generic generation guidance in the source document.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-10">
+            <div class="step-num">10</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Check storage, disable network and disable 3D</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Confirm the VDI appears under <strong>Settings → Storage</strong>.</p>
+              <ol>
+                <li><strong>Settings → Network:</strong> disable the network adapter completely. <strong>NO NETWORK.</strong></li>
+                <li><strong>Settings → Display → Screen:</strong> disable <strong>3D Acceleration</strong>.</li>
+              </ol>
+              <div class="note"><strong>Required lab settings:</strong> no network adapter and no 3D acceleration.</div>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-11">
+            <div class="step-num">11</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Start the VM and validate Windows</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>The first boot may take longer while Windows discovers VirtualBox virtual hardware. Let driver detection complete before troubleshooting aggressively.</p>
+            </div>
+          </article>
+
+          <article class="step" data-step="vbx-12">
+            <div class="step-num">12</div>
+            <div class="step-body">
+              <div class="step-title"><h3>Keep the original VHD</h3><label><input type="checkbox" class="step-check"> DONE</label></div>
+              <p>Do not delete the source VHD until the VirtualBox VM has been fully verified.</p>
+              <div class="note">The supplied guide also notes that VirtualBox can use VHD directly, but recommends converting to VDI for this migration so the native VirtualBox disk is a separate copy.</div>
+            </div>
+          </article>
+        </div>
+
+        <div class="flow-card">
+          <p class="eyebrow">VIRTUALBOX CHAIN</p>
+          <div class="flow">
+            <span>Hyper-V export</span><b>→</b><span>check checkpoints</span><b>→</b><span>VBoxManage</span><b>→</b><span>VDI</span><b>→</b><span>new VirtualBox VM</span><b>→</b><span>BIOS / EFI OFF</span><b>→</b><span>NO NETWORK</span><b>→</b><span>3D OFF</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="troubleshooting" class="section shell">
+      <div class="section-head">
+        <p class="eyebrow">PHASE 02</p>
+        <h2>Troubleshooting matrix</h2>
+        <p>Check configuration and disk state before attempting operating-system repair.</p>
+      </div>
+
+      <div class="trouble-grid">
+        <details open>
+          <summary><span>VMWARE</span> “VMDK cannot be opened directly”</summary>
+          <div>
+            <p>Open the VM's <code>.vmx</code>, not the <code>.vmdk</code>. If a VMX does not exist, create a new VMware VM and choose the existing VMDK during the wizard.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>VMWARE</span> Operating system not found</summary>
+          <div>
+            <ol>
+              <li>Confirm Hyper-V generation.</li>
+              <li>Gen 1 → BIOS; Gen 2 → UEFI.</li>
+              <li>Confirm the correct VMDK is attached.</li>
+              <li>Confirm you did not convert only a base disk from a checkpoint chain.</li>
+            </ol>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>VMWARE</span> Windows Boot Manager missing</summary>
+          <div>
+            <p>Verify firmware type, boot disk, VMDK attachment, partition/boot setup, and whether the converted disk represents the correct final Hyper-V state.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>VMWARE</span> VMDK will not open</summary>
+          <div class="code-wrap">
+            <button class="copy-btn" data-copy='qemu-img.exe info "D:\VMware\MyVM\MyVM_vmware.vmdk"'>COPY</button>
+            <pre><code>qemu-img.exe info "D:\VMware\MyVM\MyVM_vmware.vmdk"</code></pre>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>VIRTUALBOX</span> No bootable medium found</summary>
+          <div>
+            <ol>
+              <li>For this lab VM, confirm EFI is <strong>disabled</strong> and BIOS-style boot is being used.</li>
+              <li>Confirm the VDI is attached under Storage.</li>
+              <li>Confirm Hard Disk is enabled in the boot order.</li>
+            </ol>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>VIRTUALBOX</span> VDI is inaccessible</summary>
+          <div class="code-wrap">
+            <button class="copy-btn" data-copy='& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showmediuminfo "D:\VirtualBox\MyVM\MyVM.vdi"'>COPY</button>
+            <pre><code>&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showmediuminfo
+  "D:\VirtualBox\MyVM\MyVM.vdi"</code></pre>
+          </div>
+        </details>
+
+        <details>
+          <summary><span>BOTH</span> Windows crashes after migration</summary>
+          <div>
+            <p>The guest has moved to different virtual hardware. Check firmware, storage/controller configuration, attached disk, and guest drivers before assuming the disk image is damaged.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="section shell quickref">
+      <div class="section-head">
+        <p class="eyebrow">QUICK REFERENCE</p>
+        <h2>Know the file roles</h2>
+      </div>
+      <div class="cards four">
+        <article class="card file-role"><strong>.vmcx</strong><span>Hyper-V VM configuration</span><em>Do not convert to VMware/VirtualBox config.</em></article>
+        <article class="card file-role"><strong>.vhd</strong><span>Hyper-V virtual hard disk</span><em>Primary source disk in these guides.</em></article>
+        <article class="card file-role"><strong>.vmdk</strong><span>VMware virtual hard disk</span><em>Attach to a newly created VMware VM.</em></article>
+        <article class="card file-role"><strong>.vdi</strong><span>VirtualBox virtual hard disk</span><em>Attach as an existing disk.</em></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div>
+      <strong>MALWARE LAB // VM MIGRATION FIELD GUIDE</strong>
+      <p>Static offline guide derived from the supplied “Hyper-V VM to VMware” and “Hyper-V to Virtualbox” documents. <span class="author-credit">field notes // Yan Bin</span></p>
+    </div>
+    <div class="footer-tags"><span>NO FRAMEWORK</span><span>NO CDN</span><span>OFFLINE READY</span></div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">Copied to clipboard</div>
+  <script>
+(() => {
+  const tabs = document.querySelectorAll("[data-tab]");
+  const panels = {
+    vmware: document.getElementById("panel-vmware"),
+    vbox: document.getElementById("panel-vbox")
+  };
+
+  function activateTab(name) {
+    tabs.forEach(btn => {
+      const active = btn.dataset.tab === name;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+    Object.entries(panels).forEach(([key, panel]) => {
+      const active = key === name;
+      panel.classList.toggle("active", active);
+      panel.hidden = !active;
+    });
+    localStorage.setItem("migration-guide-tab", name);
+  }
+
+  tabs.forEach(btn => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
+  const savedTab = localStorage.getItem("migration-guide-tab");
+  if (savedTab && panels[savedTab]) activateTab(savedTab);
+
+  const toast = document.getElementById("toast");
+  let toastTimer;
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 1400);
+  }
+
+  document.querySelectorAll(".copy-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.copy || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Copied to clipboard");
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        showToast("Copied to clipboard");
+      }
+    });
+  });
+
+  document.querySelectorAll(".step").forEach(step => {
+    const id = step.dataset.step;
+    const checkbox = step.querySelector(".step-check");
+    if (!id || !checkbox) return;
+
+    checkbox.checked = localStorage.getItem(`migration-step:${id}`) === "1";
+    step.classList.toggle("complete", checkbox.checked);
+
+    checkbox.addEventListener("change", () => {
+      localStorage.setItem(`migration-step:${id}`, checkbox.checked ? "1" : "0");
+      step.classList.toggle("complete", checkbox.checked);
+      showToast(checkbox.checked ? "Step marked complete" : "Step reopened");
+    });
+  });
+})();
+
+</script>
+</body>
+</html>

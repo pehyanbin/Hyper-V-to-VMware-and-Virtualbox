@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPECIMEN TRANSFER // Hyper-V → VirtualBox &amp; VMware — Malware Analysis Lab</title>
+<meta name="description" content="Operator's field manual: migrate an exported Hyper-V specimen VM into VirtualBox (.vdi) and VMware Workstation (.vmdk) sandboxes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============ CORE VARIABLES ============ */
+:root{
+  --bg:#040704;
+  --bg2:#071009;
+  --panel:#081209;
+  --panel2:#0a160c;
+  --green:#00ff41;
+  --green-soft:#7dffa0;
+  --green-dim:#1c4a26;
+  --green-faint:#0d2413;
+  --cyan:#38e8ff;
+  --cyan-dim:#0e3a44;
+  --amber:#ffb000;
+  --amber-dim:#4a3403;
+  --red:#ff2a44;
+  --red-dim:#4a0a14;
+  --text:#c9e8cf;
+  --muted:#5e8a67;
+  --border:#16371d;
+  --mono-body:'IBM Plex Mono',ui-monospace,monospace;
+  --mono-head:'Share Tech Mono',monospace;
+  --display:'VT323',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--mono-body);
+  font-size:15px;
+  line-height:1.7;
+  overflow-x:hidden;
+}
+::selection{background:var(--green);color:#02120a}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#050b06}
+::-webkit-scrollbar-thumb{background:#14401f;border:2px solid #050b06;border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:#1f6630}
+a{color:var(--green-soft);text-decoration:none}
+a:hover{color:var(--green);text-shadow:0 0 8px rgba(0,255,65,.6)}
+:focus-visible{outline:2px dashed var(--green);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* ============ AMBIENT LAYERS ============ */
+#matrix{position:fixed;inset:0;z-index:-2;opacity:.16;pointer-events:none}
+.scanlines{
+  position:fixed;inset:0;z-index:60;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);
+  mix-blend-mode:multiply;
+}
+.vignette{
+  position:fixed;inset:0;z-index:59;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,8,3,.55) 100%);
+}
+#scrollbar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--green);box-shadow:0 0 10px var(--green);z-index:120}
+
+/* ============ BOOT HEADER ============ */
+header.boot{
+  position:relative;
+  padding:64px 0 56px;
+  border-bottom:1px solid var(--border);
+  background:
+    radial-gradient(900px 420px at 85% -10%,rgba(0,255,65,.07),transparent 60%),
+    radial-gradient(700px 400px at 5% 110%,rgba(56,232,255,.05),transparent 60%),
+    var(--bg);
+  overflow:hidden;
+}
+.biohazard{
+  position:absolute;top:-60px;right:-40px;font-size:340px;line-height:1;
+  color:rgba(0,255,65,.05);pointer-events:none;user-select:none;
+  animation:spin 90s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.classified{
+  display:inline-flex;gap:14px;align-items:center;
+  border:1px solid var(--red);color:var(--red);
+  font-family:var(--mono-head);font-size:12px;letter-spacing:.28em;
+  padding:6px 16px;margin-bottom:34px;
+  background:rgba(255,42,68,.06);
+  animation:blinkborder 2.4s steps(2) infinite;
+}
+@keyframes blinkborder{50%{border-color:rgba(255,42,68,.35)}}
+.boot-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+h1.glitch{
+  font-family:var(--display);
+  font-size:clamp(56px,7.5vw,104px);
+  line-height:.88;color:var(--green);
+  text-shadow:0 0 22px rgba(0,255,65,.35);
+  letter-spacing:.01em;position:relative;
+}
+h1.glitch::before,h1.glitch::after{
+  content:attr(data-text);position:absolute;inset:0;opacity:0;
+}
+h1.glitch:hover::before{opacity:.8;color:var(--cyan);transform:translate(3px,-2px);clip-path:inset(10% 0 55% 0)}
+h1.glitch:hover::after{opacity:.8;color:var(--red);transform:translate(-3px,2px);clip-path:inset(60% 0 8% 0)}
+.boot-sub{
+  font-family:var(--mono-head);color:var(--amber);
+  letter-spacing:.2em;font-size:13px;margin:18px 0 10px;
+}
+.boot-desc{color:var(--muted);max-width:52ch;margin-bottom:26px}
+.boot-links{display:flex;flex-wrap:wrap;gap:14px}
+.boot-links a{
+  font-family:var(--mono-head);font-size:13px;letter-spacing:.12em;
+  border:1px solid var(--green-dim);padding:10px 18px;color:var(--green);
+  background:rgba(0,255,65,.04);transition:all .2s;
+}
+.boot-links a.vmw{border-color:var(--cyan-dim);color:var(--cyan);background:rgba(56,232,255,.04)}
+.boot-links a:hover{transform:translateY(-2px);box-shadow:0 0 18px rgba(0,255,65,.25)}
+.boot-links a.vmw:hover{box-shadow:0 0 18px rgba(56,232,255,.25)}
+
+/* terminal window */
+.term{
+  border:1px solid var(--green-dim);
+  background:linear-gradient(180deg,#07120a,#050d07);
+  box-shadow:0 0 0 1px rgba(0,255,65,.05),0 20px 60px rgba(0,0,0,.6),inset 0 0 40px rgba(0,255,65,.03);
+}
+.term-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;border-bottom:1px solid var(--green-dim);
+  font-family:var(--mono-head);font-size:11px;letter-spacing:.2em;color:var(--muted);
+}
+.term-bar .dot{width:10px;height:10px;border-radius:50%}
+.dot.r{background:var(--red)}.dot.y{background:var(--amber)}.dot.g{background:var(--green)}
+.term-bar .tlabel{margin-left:auto}
+.term-body{padding:20px 22px;font-size:13.5px;min-height:280px}
+.type-line{display:block;white-space:pre-wrap;word-break:break-word;color:var(--green-soft)}
+.type-line.dim{color:var(--muted)}
+.type-line.warn{color:var(--amber)}
+.cursor{display:inline-block;width:9px;height:16px;background:var(--green);vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ============ TICKER ============ */
+.ticker{
+  border-top:1px solid var(--amber-dim);border-bottom:1px solid var(--amber-dim);
+  background:rgba(255,176,0,.05);overflow:hidden;white-space:nowrap;
+}
+.ticker-track{display:inline-block;padding:9px 0;font-family:var(--mono-head);font-size:12.5px;letter-spacing:.14em;color:var(--amber);animation:tick 38s linear infinite}
+.ticker:hover .ticker-track{animation-play-state:paused}
+@keyframes tick{to{transform:translateX(-50%)}}
+.ticker-track b{color:#ffd267}
+
+/* ============ NAV ============ */
+nav.mainnav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(4,9,5,.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);
+}
+nav.mainnav .wrap{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:0;padding-bottom:0}
+.navlogo{font-family:var(--display);font-size:24px;color:var(--green);padding:12px 18px 12px 0;border-right:1px solid var(--border);margin-right:10px;text-shadow:0 0 10px rgba(0,255,65,.4)}
+nav.mainnav a{
+  font-family:var(--mono-head);font-size:12px;letter-spacing:.14em;
+  color:var(--muted);padding:16px 14px;position:relative;transition:color .2s;
+}
+nav.mainnav a span{color:var(--green-dim);margin-right:6px}
+nav.mainnav a:hover{color:var(--green);text-shadow:0 0 8px rgba(0,255,65,.5)}
+nav.mainnav a:hover span{color:var(--green)}
+
+/* ============ SECTION FRAMEWORK ============ */
+section{padding:88px 0;border-bottom:1px solid var(--border);position:relative}
+.phase-tag{
+  font-family:var(--mono-head);font-size:12px;letter-spacing:.3em;color:var(--muted);
+  display:flex;align-items:center;gap:14px;margin-bottom:14px;
+}
+.phase-tag::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--green-dim),transparent)}
+.phase-tag .phnum{color:var(--green)}
+h2.scramble{
+  font-family:var(--display);font-size:clamp(38px,4.6vw,62px);line-height:1;color:var(--text);
+  margin-bottom:14px;letter-spacing:.01em;
+}
+h2.scramble em{font-style:normal;color:var(--green);text-shadow:0 0 16px rgba(0,255,65,.3)}
+.section-lede{color:var(--muted);max-width:72ch;margin-bottom:48px}
+
+/* step cards */
+.step{
+  display:grid;grid-template-columns:120px 1fr;gap:26px;
+  border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),rgba(8,18,9,.5));
+  margin-bottom:26px;transition:border-color .25s,transform .25s,box-shadow .25s;
+}
+.step:hover{border-color:var(--acc-dim,var(--green-dim));transform:translateX(6px);box-shadow:-6px 0 0 0 var(--acc,var(--green)),-6px 0 24px -6px var(--acc,var(--green))}
+.step-num{
+  font-family:var(--display);font-size:46px;color:var(--acc,var(--green));
+  border-right:1px dashed var(--border);display:flex;align-items:center;justify-content:center;
+  background:repeating-linear-gradient(45deg,transparent 0 8px,rgba(255,255,255,.012) 8px 16px);
+  text-shadow:0 0 14px color-mix(in srgb,var(--acc,var(--green)) 40%,transparent);
+}
+.step-body{padding:24px 28px 26px 4px}
+.step-body h3{font-family:var(--mono-head);font-size:16px;letter-spacing:.14em;color:#eaffea;margin-bottom:10px}
+.step-body h3 .prompt{color:var(--acc,var(--green));margin-right:8px}
+.step-body p{margin-bottom:12px;color:var(--text)}
+.step-body p.mut,.mut{color:var(--muted)}
+.step-body ul,.step-body ol{margin:8px 0 14px 22px}
+.step-body li{margin-bottom:6px}
+.step-body strong{color:#eaffea}
+kbd{
+  font-family:var(--mono-head);font-size:12px;border:1px solid var(--green-dim);
+  padding:2px 8px;background:#0a1a0e;color:var(--green-soft);border-radius:3px;
+}
+
+/* code blocks */
+.codeblock{position:relative;margin:16px 0;border:1px solid var(--green-dim);background:#03130a}
+.codeblock.amber{border-color:#5a4210;background:#141003}
+.codeblock .cb-head{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 12px;border-bottom:1px solid var(--green-dim);
+  font-family:var(--mono-head);font-size:10.5px;letter-spacing:.22em;color:var(--muted);
+}
+.codeblock pre{
+  padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.75;
+  white-space:pre-wrap;word-break:break-all;color:#d6ffd9;font-family:var(--mono-body);
+}
+.codeblock .ps{color:var(--muted);user-select:none}
+.codeblock .cm{color:#4d7a56}
+.codeblock .hl{color:var(--amber)}
+.copy-btn{
+  font-family:var(--mono-head);font-size:10.5px;letter-spacing:.18em;
+  background:none;border:1px solid var(--green-dim);color:var(--green);
+  padding:4px 12px;cursor:pointer;transition:all .2s;
+}
+.copy-btn:hover{background:rgba(0,255,65,.1);box-shadow:0 0 12px rgba(0,255,65,.3)}
+.copy-btn.done{border-color:var(--green);background:var(--green);color:#02120a}
+
+/* callouts */
+.callout{border-left:4px solid;padding:16px 20px;margin:18px 0;font-size:14px}
+.callout .co-title{font-family:var(--mono-head);font-size:12px;letter-spacing:.22em;display:block;margin-bottom:6px}
+.callout.danger{border-color:var(--red);background:rgba(255,42,68,.07)}
+.callout.danger .co-title{color:var(--red)}
+.callout.warn{border-color:var(--amber);background:rgba(255,176,0,.06)}
+.callout.warn .co-title{color:var(--amber)}
+.callout.tip{border-color:var(--green);background:rgba(0,255,65,.05)}
+.callout.tip .co-title{color:var(--green)}
+.callout.info{border-color:var(--cyan);background:rgba(56,232,255,.05)}
+.callout.info .co-title{color:var(--cyan)}
+
+/* tables */
+table.manifest{width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px}
+table.manifest th{
+  font-family:var(--mono-head);font-size:11px;letter-spacing:.22em;text-align:left;
+  color:var(--muted);border-bottom:1px solid var(--green-dim);padding:10px 14px;
+}
+table.manifest td{border-bottom:1px solid var(--border);padding:11px 14px;vertical-align:top}
+table.manifest tr:hover td{background:rgba(0,255,65,.03)}
+table.manifest .ext{font-family:var(--mono-head);color:var(--green);white-space:nowrap}
+table.manifest .ext.cy{color:var(--cyan)}
+table.manifest .ext.am{color:var(--amber)}
+table.manifest .ext.rd{color:var(--red)}
+.tag{font-family:var(--mono-head);font-size:10px;letter-spacing:.16em;padding:2px 8px;border:1px solid;white-space:nowrap}
+.tag.payload{color:var(--green);border-color:var(--green-dim)}
+.tag.junk{color:var(--muted);border-color:var(--border)}
+.tag.hazard{color:var(--red);border-color:var(--red);animation:blinkborder 2s steps(2) infinite}
+.tag.target{color:var(--cyan);border-color:var(--cyan-dim)}
+
+/* pipeline diagram */
+.pipeline{display:flex;flex-direction:column;align-items:center;gap:0;margin:34px 0}
+.pipe-node{
+  border:1px solid var(--green-dim);padding:12px 30px;font-family:var(--mono-head);
+  font-size:13px;letter-spacing:.18em;color:var(--green);background:var(--panel);
+  text-align:center;min-width:300px;transition:all .25s;
+}
+.pipe-node:hover{box-shadow:0 0 20px rgba(0,255,65,.25);transform:scale(1.03)}
+.pipe-node.alt{border-color:var(--amber-dim);color:var(--amber)}
+.pipe-arrow{color:var(--green-dim);font-size:22px;line-height:1.5;padding:2px 0;font-family:var(--display)}
+.pipe-split{display:flex;gap:34px;justify-content:center;flex-wrap:wrap;width:100%}
+.pipe-branch{display:flex;flex-direction:column;align-items:center;gap:0}
+.pipe-branch .pipe-node{min-width:250px}
+.pipe-branch.b-vbox .pipe-node{border-color:var(--green-dim);color:var(--green)}
+.pipe-branch.b-vmw .pipe-node{border-color:var(--cyan-dim);color:var(--cyan)}
+.pipe-branch.b-vmw .pipe-arrow{color:var(--cyan-dim)}
+
+/* path tabs */
+.path-tabs{display:flex;gap:0;margin-bottom:-1px;position:relative;z-index:2;flex-wrap:wrap}
+.path-tab{
+  font-family:var(--display);font-size:26px;letter-spacing:.04em;cursor:pointer;
+  background:var(--bg2);color:var(--muted);border:1px solid var(--border);border-bottom:none;
+  padding:14px 34px 10px;transition:all .2s;position:relative;top:0;
+}
+.path-tab .sub{display:block;font-family:var(--mono-head);font-size:10px;letter-spacing:.3em;margin-top:2px}
+.path-tab:hover{color:var(--text);top:-3px}
+.path-tab.active{background:var(--panel2);color:var(--acc);border-color:var(--acc-dim);top:-5px;box-shadow:0 -8px 24px -12px var(--acc)}
+.path-panel{display:none;border:1px solid var(--border);background:rgba(6,12,7,.6);padding:44px 38px;animation:panelin .4s ease}
+.path-panel.active{display:block}
+@keyframes panelin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.path-intro{display:flex;gap:20px;align-items:baseline;border-bottom:1px dashed var(--border);padding-bottom:22px;margin-bottom:34px;flex-wrap:wrap}
+.path-intro .big{font-family:var(--display);font-size:44px;color:var(--acc);text-shadow:0 0 18px color-mix(in srgb,var(--acc) 45%,transparent)}
+.path-intro p{color:var(--muted);max-width:64ch}
+
+/* incidents */
+.inc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:22px}
+.incident{
+  border:1px solid var(--border);background:var(--panel);padding:22px 24px;
+  transition:all .25s;position:relative;overflow:hidden;
+}
+.incident::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--sev,var(--red)),transparent);
+}
+.incident:hover{transform:translateY(-5px);border-color:var(--sev-dim,var(--red-dim));box-shadow:0 14px 34px -14px rgba(0,0,0,.9)}
+.inc-top{display:flex;justify-content:space-between;margin-bottom:12px;font-family:var(--mono-head);font-size:11px;letter-spacing:.18em}
+.inc-code{color:var(--muted)}
+.sev{padding:1px 8px;border:1px solid}
+.sev.crit{color:var(--red);border-color:var(--red)}
+.sev.high{color:var(--amber);border-color:var(--amber)}
+.sev.med{color:var(--cyan);border-color:var(--cyan)}
+.incident h3{font-family:var(--mono-head);font-size:14.5px;color:#ffe9ec;letter-spacing:.05em;margin-bottom:4px}
+.incident[data-path="A"] h3{color:#e6ffe9}
+.inc-where{font-family:var(--mono-head);font-size:10px;letter-spacing:.26em;color:var(--muted);margin-bottom:12px}
+.incident p{font-size:13.5px;color:var(--text)}
+.incident .fix{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.incident .fix b{color:var(--green);font-family:var(--mono-head);font-size:11px;letter-spacing:.2em}
+.incident code{color:var(--amber);font-size:12.5px}
+
+/* checklist */
+.check-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px;margin-top:36px}
+.check-col{border:1px solid var(--border);background:var(--panel);padding:26px}
+.check-col h3{font-family:var(--mono-head);font-size:13px;letter-spacing:.22em;margin-bottom:18px;color:var(--gc,var(--green))}
+.check-item{display:flex;gap:12px;align-items:flex-start;padding:7px 0;cursor:pointer;font-size:13.5px;transition:color .15s}
+.check-item:hover{color:#fff}
+.check-item input{appearance:none;width:16px;height:16px;min-width:16px;border:1px solid var(--green-dim);background:#050f07;margin-top:4px;cursor:pointer;position:relative;transition:all .15s}
+.check-item input:checked{background:var(--gc,var(--green));border-color:var(--gc,var(--green));box-shadow:0 0 10px color-mix(in srgb,var(--gc,var(--green)) 60%,transparent)}
+.check-item input:checked::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#02120a;font-size:12px;font-weight:700}
+.check-item input:checked ~ span{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--green-dim)}
+.progress-shell{margin-top:8px;border:1px solid var(--border);background:var(--panel);padding:26px}
+.progress-meta{display:flex;justify-content:space-between;font-family:var(--mono-head);font-size:12px;letter-spacing:.2em;color:var(--muted);margin-bottom:12px}
+.progress-meta b{color:var(--green);font-size:16px}
+.progress-track{height:22px;border:1px solid var(--green-dim);background:#050f07;position:relative;overflow:hidden}
+.progress-fill{height:100%;width:0;background:repeating-linear-gradient(45deg,var(--green) 0 10px,#0ad45a 10px 20px);box-shadow:0 0 18px rgba(0,255,65,.5);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+
+/* footer */
+footer{padding:56px 0 110px;background:var(--bg2)}
+.foot-grid{display:flex;justify-content:space-between;gap:36px;flex-wrap:wrap;align-items:flex-start}
+.foot-ascii{font-family:var(--mono-body);color:var(--green-dim);font-size:11px;line-height:1.4;white-space:pre}
+.foot-note{max-width:52ch;color:var(--muted);font-size:13px}
+.foot-note b{color:var(--amber)}
+
+/* status bar */
+.statusbar{
+  position:fixed;bottom:0;left:0;right:0;z-index:110;
+  background:rgba(3,8,4,.95);border-top:1px solid var(--green-dim);
+  font-family:var(--mono-head);font-size:11px;letter-spacing:.16em;color:var(--muted);
+  display:flex;justify-content:space-between;gap:18px;padding:7px 22px;
+}
+.statusbar .led{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s steps(2) infinite;margin-right:8px;vertical-align:1px}
+.statusbar .ok{color:var(--green)}
+.statusbar .clock{color:var(--green-soft)}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+/* responsive */
+@media(max-width:900px){
+  .boot-grid{grid-template-columns:1fr}
+  .biohazard{font-size:200px;top:auto;bottom:-40px}
+  .step{grid-template-columns:1fr}
+  .step-num{border-right:none;border-bottom:1px dashed var(--border);padding:8px;justify-content:flex-start;font-size:34px}
+  .step-body{padding:20px 22px 24px}
+  .statusbar .mid{display:none}
+  nav.mainnav a{padding:12px 10px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<canvas id="matrix" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div id="scrollbar" aria-hidden="true"></div>
+
+<!-- ================= BOOT HEADER ================= -->
+<header class="boot">
+  <div class="biohazard" aria-hidden="true">☣</div>
+  <div class="wrap">
+    <div class="classified">☣ CLASSIFIED // MALWARE ANALYSIS DIVISION // COURSE LAB MATERIAL ☣</div>
+    <div class="boot-grid">
+      <div>
+        <h1 class="glitch" data-text="SPECIMEN TRANSFER">SPECIMEN<br>TRANSFER</h1>
+        <p class="boot-sub">HYPER-V EXPORT → DUAL-SANDBOX DEPLOYMENT PROTOCOL</p>
+        <p class="boot-desc">
+          Field manual for relocating an exported Hyper-V specimen into two isolated analysis
+          runtimes — <strong style="color:var(--green)">Oracle VirtualBox</strong> and
+          <strong style="color:var(--cyan)">VMware Workstation</strong>. Extract the payload disk,
+          convert it, rebuild the containment VM around it. No specimen left behind.
+        </p>
+        <div class="boot-links">
+          <a href="#path-anchor" onclick="showPath('vbox')">▶ PATH_A :: VIRTUALBOX (.VDI)</a>
+          <a href="#path-anchor" class="vmw" onclick="showPath('vmware')">▶ PATH_B :: VMWARE (.VMDK)</a>
+        </div>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="tlabel">LAB-TERM-07 :: /sandbox/migration</span>
+        </div>
+        <div class="term-body" id="boot-type" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ================= TICKER ================= -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track" id="ticker-track">
+    <b>⚠ SCAN FOR .avhd / .avhdx BEFORE ANY CONVERSION</b> &nbsp;☣&nbsp; DO NOT MODIFY THE ORIGINAL .VHD &nbsp;☣&nbsp; GEN 1 = BIOS // GEN 2 = UEFI &nbsp;☣&nbsp; IN VMWARE, OPEN THE .vmx — NEVER THE .vmdk &nbsp;☣&nbsp; KEEP THE SOURCE EXPORT UNTIL THE SPECIMEN BOOTS IN BOTH SANDBOXES &nbsp;☣&nbsp; NAT FIRST, BRIDGE LATER &nbsp;☣&nbsp;
+  </div>
+</div>
+
+<!-- ================= NAV ================= -->
+<nav class="mainnav">
+  <div class="wrap">
+    <div class="navlogo">☣ VM://TRANSFER</div>
+    <a href="#briefing"><span>[00]</span>BRIEFING</a>
+    <a href="#recon"><span>[01]</span>RECON</a>
+    <a href="#path-anchor"><span>[02]</span>PATH_A :: VBOX</a>
+    <a href="#path-anchor" onclick="showPath('vmware')"><span>[03]</span>PATH_B :: VMWARE</a>
+    <a href="#incidents"><span>[04]</span>INCIDENTS</a>
+    <a href="#checklist"><span>[05]</span>CHECKLIST</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ================= PHASE 00 : BRIEFING ================= -->
+<section id="briefing">
+  <div class="wrap">
+    <div class="phase-tag"><span class="phnum">[ PHASE 00 ]</span> MISSION BRIEFING</div>
+    <h2 class="scramble" data-text="YOU CONVERT THE DISK. NOT THE VM.">YOU CONVERT THE <em>DISK</em>. NOT THE VM.</h2>
+    <p class="section-lede">
+      A Hyper-V export bundles virtual disks, configuration files and checkpoint files. VMware and
+      VirtualBox <strong>cannot read Hyper-V's <code>.vmcx</code> configuration</strong> — so the operation
+      is always the same: extract the virtual hard disk, convert it to the target runtime's format,
+      then build a fresh VM shell around it. Two runtimes, two conversion tools, one source payload.
+    </p>
+
+    <div class="pipeline reveal">
+      <div class="pipe-node">HYPER-V EXPORT &nbsp;<span style="color:var(--muted)">(.vhd payload inside)</span></div>
+      <div class="pipe-arrow">▼</div>
+      <div class="pipe-node alt">CHECKPOINT SCAN + BACKUP</div>
+      <div class="pipe-arrow">▼</div>
+      <div class="pipe-split">
+        <div class="pipe-branch b-vbox">
+          <div class="pipe-node">VBoxManage.exe clonemedium</div>
+          <div class="pipe-arrow">▼</div>
+          <div class="pipe-node">.VDI</div>
+          <div class="pipe-arrow">▼</div>
+          <div class="pipe-node">VIRTUALBOX VM</div>
+        </div>
+        <div class="pipe-branch b-vmw">
+          <div class="pipe-node">qemu-img.exe convert</div>
+          <div class="pipe-arrow">▼</div>
+          <div class="pipe-node">.VMDK</div>
+          <div class="pipe-arrow">▼</div>
+          <div class="pipe-node">VMWARE VM (.vmx)</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-family:var(--mono-head);letter-spacing:.22em;font-size:13px;color:var(--muted);margin:44px 0 6px">// ASSET MANIFEST — KNOW YOUR FILE EXTENSIONS</h3>
+    <table class="manifest reveal">
+      <thead><tr><th>EXTENSION</th><th>IDENTITY</th><th>ORIGIN</th><th>DISPOSITION</th></tr></thead>
+      <tbody>
+        <tr><td class="ext">.vmcx</td><td>Hyper-V virtual machine configuration</td><td>HYPER-V</td><td><span class="tag junk">IGNORE</span></td></tr>
+        <tr><td class="ext">.vmgs / .vmrs</td><td>Hyper-V VM state files</td><td>HYPER-V</td><td><span class="tag junk">IGNORE</span></td></tr>
+        <tr><td class="ext am">.vhd / .vhdx</td><td>Virtual hard disk — <strong>the specimen lives here</strong></td><td>HYPER-V</td><td><span class="tag payload">PAYLOAD</span></td></tr>
+        <tr><td class="ext rd">.avhd / .avhdx</td><td>Checkpoint / differencing disk — part of a disk chain</td><td>HYPER-V</td><td><span class="tag hazard">STOP &amp; ANALYZE</span></td></tr>
+        <tr><td class="ext">.vdi</td><td>VirtualBox native virtual disk</td><td>VIRTUALBOX</td><td><span class="tag target">PATH_A TARGET</span></td></tr>
+        <tr><td class="ext cy">.vmdk</td><td>VMware virtual disk</td><td>VMWARE</td><td><span class="tag target">PATH_B TARGET</span></td></tr>
+        <tr><td class="ext cy">.vmx</td><td>VMware VM configuration — <strong>the file you actually open</strong></td><td>VMWARE</td><td><span class="tag target">EXECUTE THIS</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info reveal">
+      <span class="co-title">◈ LOADOUT — TOOLS REQUIRED</span>
+      <kbd>VBoxManage.exe</kbd> — VirtualBox's command-line interface (ships with VirtualBox) &nbsp;·&nbsp;
+      <kbd>qemu-img.exe</kbd> — QEMU's offline disk image converter &nbsp;·&nbsp;
+      <kbd>PowerShell</kbd> — your recon shell &nbsp;·&nbsp;
+      <kbd>VMware Workstation</kbd> + <kbd>Oracle VirtualBox</kbd> — the two sandboxes.
+    </div>
+  </div>
+</section>
+
+<!-- ================= PHASE 01 : RECON ================= -->
+<section id="recon">
+  <div class="wrap">
+    <div class="phase-tag"><span class="phnum">[ PHASE 01 ]</span> RECONNAISSANCE — SHARED BY BOTH PATHS</div>
+    <h2 class="scramble" data-text="SURVEY THE EXPORT BEFORE YOU TOUCH IT">SURVEY THE EXPORT <em>BEFORE</em> YOU TOUCH IT</h2>
+    <p class="section-lede">
+      Every failed migration in this lab traces back to a skipped recon step. Run these four checks
+      on the raw Hyper-V export before either conversion path. Both PATH_A and PATH_B assume this phase is complete.
+    </p>
+
+    <!-- R1 -->
+    <article class="step reveal" style="--acc:var(--amber);--acc-dim:var(--amber-dim)">
+      <div class="step-num">R.1</div>
+      <div class="step-body">
+        <h3><span class="prompt">operator@lab:~$</span>MAP THE EXPORT STRUCTURE</h3>
+        <p>A clean Hyper-V export lands in three folders. Microsoft confirms an export contains the
+           virtual disks, configuration files and any checkpoint files — disks sit in
+           <strong>Virtual Hard Disks</strong>. Only one of these folders matters to your target sandboxes:</p>
+        <div class="codeblock amber">
+          <div class="cb-head"><span>EXPORT TOPOLOGY</span></div>
+          <pre>D:\HyperV-Export\
+├── Virtual Machines\
+│   ├── &lt;GUID&gt;.vmcx        <span class="cm"># Hyper-V config — IGNORE</span>
+│   ├── &lt;GUID&gt;.vmgs        <span class="cm"># Hyper-V state  — IGNORE</span>
+│   └── &lt;GUID&gt;.vmrs        <span class="cm"># Hyper-V state  — IGNORE</span>
+├── Virtual Hard Disks\
+│   └── <span class="hl">abcd2.vhd          ◄── THE PAYLOAD. THIS IS WHAT WE EXTRACT.</span>
+└── Snapshots\             <span class="cm"># ◄── SCAN THIS FOLDER NEXT</span></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- R2 -->
+    <article class="step reveal" style="--acc:var(--red);--acc-dim:var(--red-dim)">
+      <div class="step-num">R.2</div>
+      <div class="step-body">
+        <h3><span class="prompt">operator@lab:~$</span>SWEEP FOR CHECKPOINT DISKS</h3>
+        <p>Inside <strong>Virtual Hard Disks\</strong> and <strong>Snapshots\</strong>, look for
+           <code style="color:var(--red)">.avhd</code> / <code style="color:var(--red)">.avhdx</code> files.
+           Those are Hyper-V checkpoint (differencing) disks — each one stores changes layered on top of a parent disk:</p>
+        <div class="codeblock amber">
+          <div class="cb-head"><span>CHECKPOINT CHAIN — IF DETECTED</span></div>
+          <pre>abcd2.vhd                    <span class="cm">◄── base disk (an OLDER state)</span>
+   ▲
+   └── abcd2-checkpoint1.avhd
+              ▲
+              └── abcd2-checkpoint2.avhd   <span class="hl">◄── CURRENT state lives up here</span></pre>
+        </div>
+        <div class="codeblock">
+          <div class="cb-head"><span>POWERSHELL — LIST EVERY DISK IN THE EXPORT</span><button class="copy-btn">[ COPY ]</button></div>
+          <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Get-ChildItem "D:\HyperV-Export\Virtual Hard Disks" | Select-Object Name, Length</span></pre>
+        </div>
+        <div class="callout danger">
+          <span class="co-title">⚠ CRITICAL — HALT CONDITION</span>
+          If <strong>any</strong> <code>.avhd</code>/<code>.avhdx</code> is present, <strong>do not convert anything yet</strong>.
+          Converting only the base <code>.vhd</code> resurrects an outdated state of the specimen — missing files,
+          missing configs, wrong results. Consolidate the chain first (merge checkpoints in Hyper-V before exporting,
+          or ask your instructor for the disk-chain consolidation procedure).
+        </div>
+        <p class="mut">If you see exactly one plain <code>.vhd</code> and nothing else — sweep is clear. Proceed.</p>
+      </div>
+    </article>
+
+    <!-- R3 -->
+    <article class="step reveal" style="--acc:var(--amber);--acc-dim:var(--amber-dim)">
+      <div class="step-num">R.3</div>
+      <div class="step-body">
+        <h3><span class="prompt">operator@lab:~$</span>QUARANTINE A BACKUP COPY</h3>
+        <p>The original export is your fallback evidence — <strong>never modify it</strong>. Stand up working
+           directories for each target and keep the source disk read-only in spirit:</p>
+        <div class="codeblock amber">
+          <div class="cb-head"><span>DIR LAYOUT AFTER BACKUP</span></div>
+          <pre>D:\HyperV-Export\    <span class="cm">◄── original, UNTOUCHED (your backup)</span>
+D:\HyperV-Backup\    <span class="cm">◄── optional second copy, recommended</span>
+D:\VirtualBox\MyVM\  <span class="cm">◄── PATH_A working dir → will hold MyVM.vdi</span>
+D:\VMware\abcd2\     <span class="cm">◄── PATH_B working dir → will hold abcd2_vmware.vmdk</span></pre>
+        </div>
+        <div class="callout warn">
+          <span class="co-title">◮ LIVE-DISK WARNING</span>
+          Never convert a disk that a running VM is using. QEMU's own documentation warns that modifying an
+          image while another process holds it can destroy the image. Power off the Hyper-V specimen first.
+        </div>
+      </div>
+    </article>
+
+    <!-- R4 -->
+    <article class="step reveal" style="--acc:var(--green);--acc-dim:var(--green-dim)">
+      <div class="step-num">R.4</div>
+      <div class="step-body">
+        <h3><span class="prompt">operator@lab:~$</span>IDENTIFY THE GENERATION (FIRMWARE PROFILE)</h3>
+        <p>Hyper-V VMs are <strong>Generation 1</strong> (BIOS firmware) or <strong>Generation 2</strong> (UEFI firmware).
+           Generation is a property of the <em>VM</em>, not the disk — you cannot tell by staring at the <code>.vhd</code>.
+           If the original Hyper-V VM still exists, interrogate it:</p>
+        <div class="codeblock">
+          <div class="cb-head"><span>POWERSHELL — QUERY VM GENERATION</span><button class="copy-btn">[ COPY ]</button></div>
+          <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Get-VM "abcd2" | Select-Object Name, Generation, State</span>
+<span class="cm">#  Name   Generation   State
+#  -----  ----------   -----
+#  abcd2  2            Off      ◄── Generation 2 = UEFI</span></pre>
+        </div>
+        <p>Record the result — both sandboxes must be configured to match, or the specimen will not boot:</p>
+        <table class="manifest">
+          <thead><tr><th>HYPER-V</th><th>FIRMWARE</th><th>VIRTUALBOX SETTING</th><th>VMWARE SETTING</th></tr></thead>
+          <tbody>
+            <tr><td class="ext">Generation 1</td><td>BIOS</td><td>EFI stays <strong>disabled</strong></td><td class="ext cy" style="color:var(--text)">Firmware type → <strong>BIOS</strong></td></tr>
+            <tr><td class="ext">Generation 2</td><td>UEFI</td><td><strong>Enable EFI</strong> ✓ (System → Motherboard)</td><td class="ext cy" style="color:var(--text)">Firmware type → <strong>UEFI</strong></td></tr>
+          </tbody>
+        </table>
+        <p class="mut">Also in Hyper-V Manager: right-click VM → Settings shows generation/firmware if you prefer the GUI.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ================= PHASE 02 : EXECUTION PATHS ================= -->
+<section id="path-anchor">
+  <div class="wrap">
+    <div class="phase-tag"><span class="phnum">[ PHASE 02 ]</span> EXECUTION — SELECT CONVERSION PATH</div>
+    <h2 class="scramble" data-text="CHOOSE YOUR SANDBOX. EXECUTE.">CHOOSE YOUR <em>SANDBOX</em>. EXECUTE.</h2>
+    <p class="section-lede">
+      Two independent deployment routes out of the same Hyper-V export. Run both — a malware analyst
+      keeps redundant detonation environments. Each path is self-contained from the moment recon is done.
+    </p>
+
+    <div class="path-tabs" role="tablist" aria-label="Conversion paths">
+      <button class="path-tab active" id="tab-vbox" role="tab" aria-selected="true" data-path="vbox" style="--acc:var(--green);--acc-dim:var(--green-dim)" onclick="showPath('vbox')">
+        PATH_A :: VIRTUALBOX<span class="sub">VBoxManage → .VDI</span>
+      </button>
+      <button class="path-tab" id="tab-vmware" role="tab" aria-selected="false" data-path="vmware" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)" onclick="showPath('vmware')">
+        PATH_B :: VMWARE<span class="sub">qemu-img → .VMDK</span>
+      </button>
+    </div>
+
+    <!-- ============ PANEL A : VIRTUALBOX ============ -->
+    <div class="path-panel active" id="path-vbox" role="tabpanel" aria-labelledby="tab-vbox" style="--acc:var(--green);--acc-dim:var(--green-dim)">
+      <div class="path-intro">
+        <span class="big">☣ A</span>
+        <p><strong style="color:var(--green)">TARGET: ORACLE VIRTUALBOX.</strong> Weapon of choice is
+        <kbd>VBoxManage.exe</kbd>, VirtualBox's command-line interface. We clone the <code>.vhd</code> into
+        VirtualBox's native <code>.vdi</code> format — leaving the original export untouched as fallback.</p>
+      </div>
+
+      <article class="step reveal">
+        <div class="step-num">A.1</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>VERIFY THE TOOLCHAIN — LOCATE VBoxManage.exe</h3>
+          <p>On Windows it normally lives at <code>C:\Program Files\Oracle\VirtualBox\VBoxManage.exe</code>. Sweep the directory:</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Get-ChildItem "C:\Program Files\Oracle\VirtualBox" -Force</span></pre>
+          </div>
+          <p>You should see <kbd>VirtualBox.exe</kbd>, <kbd>VBoxManage.exe</kbd>, <kbd>VBoxHeadless.exe</kbd> among the files.</p>
+          <div class="callout danger">
+            <span class="co-title">⚠ IF VBoxManage.exe IS MISSING</span>
+            Do <strong>not</strong> hunt for a standalone VBoxManage.exe download. Oracle's docs identify the
+            <em>VirtualBox application component</em> as the carrier of the main binaries — it must not be omitted.
+            <strong>Repair/reinstall VirtualBox</strong> from Oracle's official installer, then re-sweep the folder.
+          </div>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL — FOLDER MISSING ENTIRELY? HUNT THE INSTALL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Get-Command VirtualBox.exe -ErrorAction SilentlyContinue</span>
+<span class="ps">PS C:\&gt;</span> <span class="cmd">Get-ChildItem "C:\Program Files" -Filter "VirtualBox.exe" -Recurse -ErrorAction SilentlyContinue</span></pre>
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.2</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>TEST-FIRE THE BINARY</h3>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version</span>
+<span class="cm"># expected output: e.g. 7.1.x  ← any version number means the tool is armed</span></pre>
+          </div>
+          <p class="mut">The <code>&amp;</code> is PowerShell's call operator — required when executing a quoted path. If you get
+          <em>"not recognized as an internal or external command"</em>, the binary is absent → return to A.1.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.3</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>CONFIRM THE PAYLOAD PATH</h3>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Test-Path "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd"</span>
+<span class="cm"># True  → target acquired
+# False → path is wrong; use File Explorer to locate the real .vhd</span></pre>
+          </div>
+          <p><strong>Why the quotation marks?</strong> Paths like <code>D:\Hyper-V Export\...\Virtual Hard Disks\</code>
+          contain spaces. Without quotes, PowerShell reads the spaces as argument separators and the command fragments.
+          Quotes weld the whole path into a single argument. This rule applies to <em>every</em> command in this manual.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.4</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>EXECUTE THE CONVERSION — VHD → VDI</h3>
+          <p>Create the destination folder first (<code>D:\VirtualBox\MyVM\</code>), then fire the clone:</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL — THE MAIN EVENT</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clone medium disk "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" "D:\VirtualBox\MyVM\MyVM.vdi" --format VDI</span></pre>
+          </div>
+          <ul>
+            <li>1st quoted path → <strong>source</strong> (<code>.vhd</code>)</li>
+            <li>2nd quoted path → <strong>destination</strong> (<code>.vdi</code>)</li>
+            <li><code>--format VDI</code> → output in VirtualBox's native disk format</li>
+          </ul>
+          <p>A progress readout crawls from <code>0% ... 100%</code>. Duration scales with disk size, drive speed and CPU.
+          Walk away. Do <strong>not</strong> delete the original <code>.vhd</code> while it runs — or ever, for now.</p>
+          <div class="callout danger">
+            <span class="co-title">⚠ RE-VERIFY BEFORE FIRING</span>
+            If your recon in R.2 surfaced any <code>.avhd</code>/<code>.avhdx</code> files, <strong>abort</strong>.
+            You would be cloning only the base disk — an old state of the specimen.
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.5</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>CONFIRM THE .VDI MATERIALIZED</h3>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">Test-Path "D:\VirtualBox\MyVM\MyVM.vdi"</span>
+<span class="cm"># True → payload delivered</span>
+<span class="ps">PS C:\&gt;</span> <span class="cmd">Get-Item "D:\VirtualBox\MyVM\MyVM.vdi" | Select-Object Name, Length, FullName</span></pre>
+          </div>
+          <p class="mut">Sanity-check the size. A suspiciously tiny <code>Length</code> means the conversion went sideways.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.6</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>FORGE THE VM SHELL IN VIRTUALBOX</h3>
+          <p>Open VirtualBox → <kbd>New</kbd>. This shell mimics the original Hyper-V hardware profile:</p>
+          <ul>
+            <li><strong>Name:</strong> same or similar to the original (e.g. <code>MyVM</code>)</li>
+            <li><strong>Type / Version:</strong> match the OS already inside the disk — e.g. <em>Microsoft Windows → Windows 11 (64-bit)</em></li>
+            <li><strong>RAM:</strong> mirror the Hyper-V allocation (4096 MB → 4096 MB; 8192 → 8192). Adjustable later</li>
+            <li><strong>CPU:</strong> match the virtual processor count (e.g. 4), but never hand the VM every physical core</li>
+          </ul>
+          <div class="callout warn">
+            <span class="co-title">◮ DO NOT INSTALL AN OS</span>
+            We are <strong>not</strong> installing Windows again. The installation already lives inside your <code>.vdi</code>.
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.7</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>ATTACH THE CONVERTED DISK</h3>
+          <p>When the wizard asks about a virtual hard disk → <kbd>Use an Existing Virtual Hard Disk File</kbd> →
+          browse to <code>D:\VirtualBox\MyVM\MyVM.vdi</code>.</p>
+          <p class="mut">Already built the VM without a disk? Select the VM → <kbd>Settings</kbd> → <kbd>Storage</kbd> →
+          pick the storage controller → <kbd>Add Hard Disk</kbd> → <em>Choose Existing Disk</em> → select your <code>.vdi</code>.</p>
+          <p>Under <kbd>Settings → Storage</kbd>, a conventional setup (disk on a SATA controller) is the goal.
+          When migrating an existing Windows installation, resist the urge to tinker — change one variable at a time.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.8</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>SET THE FIRMWARE (RECON R.4 PAYS OFF HERE)</h3>
+          <p><kbd>Settings → System → Motherboard</kbd>:</p>
+          <ul>
+            <li>Original was <strong>Generation 2 / UEFI</strong> → tick <kbd>Enable EFI</kbd></li>
+            <li>Original was <strong>Generation 1 / BIOS</strong> → leave EFI off</li>
+            <li>While you're there: check <strong>Boot Order</strong> — <em>Hard Disk</em> enabled and above optical/network</li>
+          </ul>
+          <div class="callout danger">
+            <span class="co-title">⚠ GET THIS WRONG AND…</span>
+            …you'll stare at <em>"No bootable medium found"</em> even though the <code>.vdi</code> holds a perfectly
+            live Windows installation. See INCIDENT INC-01.
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.9</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>NETWORK: NAT FIRST</h3>
+          <p><kbd>Settings → Network → Adapter 1</kbd> → <kbd>Enable Network Adapter</kbd> → Attached to: <kbd>NAT</kbd>.
+          NAT gives the specimen simple outbound internet with zero LAN exposure — correct posture for a first boot.
+          Switch to <kbd>Bridged Adapter</kbd> later only if the VM must appear as a real host on your physical network.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.10</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>DETONATE — FIRST BOOT</h3>
+          <p>Click <kbd>Start</kbd>. Expect turbulence: the first boot runs long because Windows is discovering an
+          entirely new virtual hardware set — fresh storage controllers, NIC, firmware. Driver installations and brief
+          weirdness are <strong>normal</strong>. Let Windows finish. Do not force-reset mid-discovery.</p>
+          <div class="callout tip">
+            <span class="co-title">✓ MISSION SUCCESS STATE</span>
+            Windows boots → migration is essentially complete. You now run:
+            <em>Hyper-V export (MyVM.vhd) → VBoxManage clonemedium → MyVM.vdi → VirtualBox VM</em>.
+            Keep the original <code>.vhd</code> until the VirtualBox VM is proven stable.
+          </div>
+          <p class="mut">Blue screen instead? The specimen crossed hardware universes — log the exact stop code and
+          proceed to INCIDENT INC-02 before assuming the disk is dead.</p>
+        </div>
+      </article>
+
+      <article class="step reveal">
+        <div class="step-num">A.11</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>OPTIONAL :: SKIP CONVERSION ENTIRELY</h3>
+          <p>Conversion is not strictly mandatory — VirtualBox can mount <code>.vhd</code> directly, and
+          <code>clone medium</code> also speaks VMDK, VHD, RAW and more. But for a migration, Option A (→ VDI) is
+          recommended: native format, independent copy, original Hyper-V disk untouched.</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL — IF VIRTUALBOX CALLS THE .VDI "INACCESSIBLE"</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">&amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showmediuminfo "D:\VirtualBox\MyVM\MyVM.vdi"</span></pre>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <!-- ============ PANEL B : VMWARE ============ -->
+    <div class="path-panel" id="path-vmware" role="tabpanel" aria-labelledby="tab-vmware" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+      <div class="path-intro">
+        <span class="big">☣ B</span>
+        <p><strong style="color:var(--cyan)">TARGET: VMWARE WORKSTATION.</strong> Weapon of choice is
+        <kbd>qemu-img.exe</kbd>, QEMU's offline image converter. We forge a <code>.vmdk</code> from the Hyper-V
+        <code>.vhd</code>, then let VMware Workstation build the <code>.vmx</code> shell around it.</p>
+      </div>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.1</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>DEPLOY THE CONVERTER — QEMU'S qemu-img</h3>
+          <p>Obtain <kbd>qemu-img.exe</kbd> (e.g. the Cloudbase Windows build: <code>https://cloudbase.it/qemu-img-windows/</code>)
+          and drop it somewhere sane, e.g. <code>C:\Program Files\qemu\</code>. Test-fire it:</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">qemu-img.exe --version</span>
+<span class="cm"># if "not recognized" → it's not on PATH. Invoke with the full path instead:</span>
+<span class="ps">PS C:\&gt;</span> <span class="cmd">"C:\Program Files\qemu\qemu-img.exe" --version</span></pre>
+          </div>
+          <p class="mut">A version number means the tool is armed. QEMU documents <code>qemu-img</code> as an offline
+          image converter supporting VHD (<code>vpc</code>) and VMDK among its formats.</p>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.2</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>INTERROGATE THE SOURCE DISK</h3>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">qemu-img.exe info "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd"</span></pre>
+          </div>
+          <p>Confirm QEMU reports the format as <code>vpc</code> (its name for VHD) plus virtual/disk size.
+          Quotes are mandatory — <code>Virtual Hard Disks</code> contains spaces that would otherwise shred the argument.</p>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.3</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>EXECUTE THE CONVERSION — VHD → VMDK</h3>
+          <p>Create <code>D:\VMware\abcd2\</code> first, then:</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL — THE MAIN EVENT</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">qemu-img.exe convert -p -f vpc -O vmdk "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd" "D:\VMware\abcd2\abcd2_vmware.vmdk"</span></pre>
+          </div>
+          <table class="manifest">
+            <thead><tr><th>SWITCH</th><th>FUNCTION</th></tr></thead>
+            <tbody>
+              <tr><td class="ext cy">convert</td><td>run the disk conversion operation</td></tr>
+              <tr><td class="ext cy">-p</td><td>show progress</td></tr>
+              <tr><td class="ext cy">-f vpc</td><td>source format = VHD</td></tr>
+              <tr><td class="ext cy">-O vmdk</td><td>output format = VMDK <span class="mut">(capital O — that's "output", not a zero)</span></td></tr>
+            </tbody>
+          </table>
+          <p>Progress ticks upward; duration depends on disk size and drive speed. When it lands you'll own
+          <code>D:\VMware\abcd2\abcd2_vmware.vmdk</code>.</p>
+          <div class="callout danger">
+            <span class="co-title">⚠ CHECKPOINT CHAIN REMINDER</span>
+            <code>.avhd</code>/<code>.avhdx</code> present? Stop. Converting only <code>abcd2.vhd</code> clones an
+            older state of the specimen. Resolve the chain first (PHASE 01 / R.2).
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.4</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>VERIFY THE VMDK BEFORE TRUSTING IT</h3>
+          <div class="codeblock">
+            <div class="cb-head"><span>POWERSHELL</span><button class="copy-btn">[ COPY ]</button></div>
+            <pre><span class="ps">PS C:\&gt;</span> <span class="cmd">qemu-img.exe info "D:\VMware\abcd2\abcd2_vmware.vmdk"</span>
+<span class="cm"># expected:  file format: vmdk  + virtual size / disk size readout</span></pre>
+          </div>
+          <p class="mut">If QEMU can read its own output, the disk structure is sound. If it can't — the conversion failed; rerun before blaming anything else.</p>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.5</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>FORGE THE VM SHELL — WIZARD, CUSTOM MODE</h3>
+          <p>In VMware Workstation: <kbd>File → New Virtual Machine</kbd>. This is where most operators go wrong, so follow exactly:</p>
+          <ol>
+            <li>Choose <kbd>Custom (advanced)</kbd> → Next <span class="mut">(lets you control hardware compatibility; the default/recommended compatibility is fine)</span></li>
+            <li>Guest OS screen → select <strong>"I will install the operating system later"</strong> — you are <em>not</em> installing anything; an OS already inhabits the <code>.vmdk</code></li>
+            <li>Pick the OS <strong>already inside the disk</strong> — e.g. <em>Microsoft Windows → Windows 11 x64</em>, or Windows Server 2022. Know your bitness: plain "Windows 10" = 32-bit, "Windows 10 x64" = 64-bit</li>
+            <li>Name it (e.g. <code>abcd2_vmware</code>) and point the location at <code>D:\VMware\abcd2\</code> — somewhere with real free space</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.6</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>PROVISION CPU / RAM / NETWORK</h3>
+          <ul>
+            <li><strong>CPU:</strong> roughly mirror Hyper-V — e.g. 4 virtual processors → 1 processor × 4 cores (or equivalent)</li>
+            <li><strong>RAM:</strong> match the original (8192 MB → 8192 MB), but don't starve your Windows host</li>
+            <li><strong>Network:</strong> <kbd>NAT</kbd> for the first boot — simplest and safest. Bridged / Host-only later as needed</li>
+          </ul>
+          <p class="mut">You don't have to reproduce Hyper-V's exact virtual hardware — approximate is correct.</p>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.7</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>THE DECISIVE SCREEN — SELECT A DISK</h3>
+          <ol>
+            <li>At <strong>Select a Disk</strong> choose <kbd>Use an existing virtual disk</kbd> → Next</li>
+            <li><kbd>Browse</kbd> → <code>D:\VMware\abcd2\</code> → select <code>abcd2_vmware.vmdk</code> → Next</li>
+            <li>If asked whether to <em>Keep Existing Format</em> or <em>Convert</em> → <strong>Keep Existing Format</strong>. The disk is already converted; no gratuitous re-conversions</li>
+            <li>Finish the wizard</li>
+          </ol>
+          <p>VMware now generates the file set — <code>abcd2_vmware.vmdk</code>, <code>abcd2_vmware.vmx</code>,
+          <code>.nvram</code>, logs. The critical artifact:</p>
+          <div class="codeblock">
+            <div class="cb-head"><span>KNOW YOUR FILES</span></div>
+            <pre>abcd2_vmware.<span class="hl">vmdk</span>   <span class="cm">= the virtual HARD DISK  (do NOT double-click)</span>
+abcd2_vmware.<span class="hl">vmx</span>    <span class="cm">= the VM CONFIGURATION   (THIS is what you open)</span></pre>
+          </div>
+          <div class="callout info">
+            <span class="co-title">◈ WHY YOU SAW THAT ERROR BEFORE</span>
+            <em>"abcd2_vmware.vmdk cannot be opened directly. Open the virtual machine configuration file (.vmx) instead."</em>
+            — that message is correct behavior. The VMDK is a disk; the VMX is the machine. Broadcom's documented
+            procedure is exactly this: create a new VM and point it at the existing VMDK.
+          </div>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.8</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>SET FIRMWARE TO MATCH THE GENERATION</h3>
+          <p><kbd>VM → Settings → Options → Advanced</kbd> → Firmware type:</p>
+          <ul>
+            <li>Hyper-V <strong>Generation 1</strong> → <kbd>BIOS</kbd></li>
+            <li>Hyper-V <strong>Generation 2</strong> → <kbd>UEFI</kbd></li>
+          </ul>
+          <p>If the original Gen 2 VM used <strong>Secure Boot</strong>, don't juggle it immediately. First establish
+          UEFI + correct VMDK + correct boot device; only if the VM still refuses to boot, revisit Secure Boot
+          under <kbd>Options</kbd>. Then check <kbd>Options → Advanced → Boot Options</kbd> and make sure the hard
+          disk is a live boot candidate.</p>
+        </div>
+      </article>
+
+      <article class="step reveal" style="--acc:var(--cyan);--acc-dim:var(--cyan-dim)">
+        <div class="step-num">B.9</div>
+        <div class="step-body">
+          <h3><span class="prompt">$</span>DETONATE — FIRST BOOT</h3>
+          <p>Confirm under <kbd>VM → Settings → Hard Disk</kbd> that the disk file points at
+          <code>D:\VMware\abcd2\abcd2_vmware.vmdk</code>, then <kbd>Power on this virtual machine</kbd>.
+          Expected boot chain: <em>VMware → UEFI/BIOS → Windows Boot Manager → Windows</em>. The first boot is slow —
+          Windows is meeting brand-new virtual hardware. Be patient.</p>
+          <div class="callout tip">
+            <span class="co-title">✓ POST-BOOT HARDENING SEQUENCE</span>
+            <strong>1.</strong> Install <kbd>VMware Tools</kbd> once Windows is up (guest drivers + integration), then reboot ·
+            <strong>2.</strong> <kbd>Win+X → Device Manager</kbd> — hunt yellow warnings / unknown devices ·
+            <strong>3.</strong> Verify networking (<code>ipconfig</code>; NAT should give you internet) ·
+            <strong>4.</strong> Expect possible <strong>Windows reactivation</strong> — the hardware fingerprint changed,
+            and migration does not automatically preserve activation.
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PHASE 03 : INCIDENTS ================= -->
+<section id="incidents">
+  <div class="wrap">
+    <div class="phase-tag"><span class="phnum">[ PHASE 03 ]</span> INCIDENT RESPONSE — TROUBLESHOOTING DOSSIER</div>
+    <h2 class="scramble" data-text="KNOWN FAILURE MODES &amp; COUNTERMEASURES">KNOWN FAILURE MODES &amp; <em>COUNTERMEASURES</em></h2>
+    <p class="section-lede">
+      Filed from actual migration attempts. Before you panic-reinstall anything, match your symptom against
+      the dossier. Nine times out of ten it's firmware, attachment, or the checkpoint chain.
+    </p>
+    <div class="inc-grid">
+
+      <article class="incident reveal" data-path="A" style="--sev:var(--red);--sev-dim:var(--red-dim)">
+        <div class="inc-top"><span class="inc-code">INC-01</span><span class="sev crit">SEV: CRITICAL</span></div>
+        <h3>"No bootable medium found"</h3>
+        <div class="inc-where">PATH_A :: VIRTUALBOX</div>
+        <p>The disk holds a live OS but the shell can't boot from it. Almost always firmware mismatch.</p>
+        <div class="fix"><b>FIX ►</b> <strong>A.</strong> Gen 2 source? Enable EFI (Settings → System → Motherboard).
+        <strong>B.</strong> Verify the <code>.vdi</code> is actually attached under Storage.
+        <strong>C.</strong> Boot Order — Hard Disk enabled and first.</div>
+      </article>
+
+      <article class="incident reveal" data-path="AB" style="--sev:var(--amber);--sev-dim:var(--amber-dim)">
+        <div class="inc-top"><span class="inc-code">INC-02</span><span class="sev high">SEV: HIGH</span></div>
+        <h3>Windows blue-screens on first boot</h3>
+        <div class="inc-where">PATH_A + PATH_B</div>
+        <p>Don't assume disk corruption. The specimen jumped hypervisors — new storage controllers, CPU presentation,
+        firmware, NIC. Windows can choke on the delta.</p>
+        <div class="fix"><b>FIX ►</b> Photograph the <strong>exact stop code</strong>. Check firmware setting and disk
+        controller type. Do <em>not</em> reinstall Windows — preserving this installation is the whole mission.</div>
+      </article>
+
+      <article class="incident reveal" data-path="A" style="--sev:var(--amber);--sev-dim:var(--amber-dim)">
+        <div class="inc-top"><span class="inc-code">INC-03</span><span class="sev high">SEV: HIGH</span></div>
+        <h3>'VBoxManage' is not recognized…</h3>
+        <div class="inc-where">PATH_A :: VIRTUALBOX</div>
+        <p>The binary is missing or VirtualBox was installed without its main application component.</p>
+        <div class="fix"><b>FIX ►</b> Sweep <code>C:\Program Files\Oracle\VirtualBox</code>. If absent, repair/reinstall
+        VirtualBox from Oracle's official installer — never download VBoxManage.exe standalone. See step A.1.</div>
+      </article>
+
+      <article class="incident reveal" data-path="A" style="--sev:var(--cyan);--sev-dim:var(--cyan-dim)">
+        <div class="inc-top"><span class="inc-code">INC-04</span><span class="sev med">SEV: MEDIUM</span></div>
+        <h3>VirtualBox reports the .VDI is "inaccessible"</h3>
+        <div class="inc-where">PATH_A :: VIRTUALBOX</div>
+        <p>VirtualBox can't parse the medium's metadata.</p>
+        <div class="fix"><b>FIX ►</b> Interrogate it: <code>VBoxManage.exe showmediuminfo "…\MyVM.vdi"</code>.
+        If the tool can't read it either, the conversion is suspect → rerun step A.4.</div>
+      </article>
+
+      <article class="incident reveal" data-path="B" style="--sev:var(--red);--sev-dim:var(--red-dim)">
+        <div class="inc-top"><span class="inc-code">INC-05</span><span class="sev crit">SEV: CRITICAL</span></div>
+        <h3>".vmdk cannot be opened directly"</h3>
+        <div class="inc-where">PATH_B :: VMWARE</div>
+        <p>You double-clicked the disk. The VMDK is storage, not a machine definition.</p>
+        <div class="fix"><b>FIX ►</b> Open <code>abcd2_vmware.vmx</code> instead — or open Workstation and load the VM
+        from there. If no <code>.vmx</code> exists, run the wizard again and point it at the existing VMDK (step B.5–B.7).</div>
+      </article>
+
+      <article class="incident reveal" data-path="B" style="--sev:var(--red);--sev-dim:var(--red-dim)">
+        <div class="inc-top"><span class="inc-code">INC-06</span><span class="sev crit">SEV: CRITICAL</span></div>
+        <h3>"Operating System not found"</h3>
+        <div class="inc-where">PATH_B :: VMWARE</div>
+        <p>VMware's firmware can't see a bootable target.</p>
+        <div class="fix"><b>FIX ►</b> Match firmware to generation (Gen 1 → BIOS, Gen 2 → UEFI). Confirm the correct
+        VMDK is attached. If the source had a checkpoint chain, you may have converted only the stale base disk.</div>
+      </article>
+
+      <article class="incident reveal" data-path="B" style="--sev:var(--amber);--sev-dim:var(--amber-dim)">
+        <div class="inc-top"><span class="inc-code">INC-07</span><span class="sev high">SEV: HIGH</span></div>
+        <h3>Windows Boot Manager never appears</h3>
+        <div class="inc-where">PATH_B :: VMWARE</div>
+        <p>Firmware fires, but nothing bootable answers.</p>
+        <div class="fix"><b>FIX ►</b> Verify in order: firmware type → boot device → VMDK attachment → partition type →
+        that you converted the <em>final</em> Hyper-V disk. Do not start Windows repair until all five check out.</div>
+      </article>
+
+      <article class="incident reveal" data-path="AB" style="--sev:var(--red);--sev-dim:var(--red-dim)">
+        <div class="inc-top"><span class="inc-code">INC-08</span><span class="sev crit">SEV: CRITICAL</span></div>
+        <h3>Booted — but the data is from the past</h3>
+        <div class="inc-where">PATH_A + PATH_B :: CHECKPOINT CHAIN</div>
+        <p>Specimen "works" yet files/settings are stale. An <code>.avhd</code>/<code>.avhdx</code> chain existed and
+        only the base <code>.vhd</code> got converted.</p>
+        <div class="fix"><b>FIX ►</b> Consolidate the chain (merge checkpoints in Hyper-V, re-export) and convert again.
+        This is why R.2 is non-negotiable.</div>
+      </article>
+
+      <article class="incident reveal" data-path="B" style="--sev:var(--cyan);--sev-dim:var(--cyan-dim)">
+        <div class="inc-top"><span class="inc-code">INC-09</span><span class="sev med">SEV: MEDIUM</span></div>
+        <h3>qemu-img.exe "is not recognized"</h3>
+        <div class="inc-where">PATH_B :: VMWARE</div>
+        <p>The converter isn't on your PATH.</p>
+        <div class="fix"><b>FIX ►</b> Invoke it by full path — <code>"C:\Program Files\qemu\qemu-img.exe" --version</code>
+        — or add its directory to PATH.</div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= PHASE 04 : CHECKLIST ================= -->
+<section id="checklist">
+  <div class="wrap">
+    <div class="phase-tag"><span class="phnum">[ PHASE 04 ]</span> OPERATOR CHECKLIST — PERSISTED LOCALLY</div>
+    <h2 class="scramble" data-text="CLEAR EVERY BOX BEFORE SIGN-OFF">CLEAR EVERY BOX BEFORE <em>SIGN-OFF</em></h2>
+    <p class="section-lede">Your progress is stored in this browser. Do not mark Phase 05 complete until both
+    sandboxes boot the specimen cleanly — and even then, the original export stays archived.</p>
+
+    <div class="progress-shell reveal">
+      <div class="progress-meta"><span>MIGRATION PROGRESS</span><b id="prog-label">0 / 30 :: 0%</b></div>
+      <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
+    </div>
+
+    <div class="check-wrap">
+      <div class="check-col reveal" style="--gc:var(--amber)">
+        <h3 style="color:var(--amber)">[ PHASE 01 :: RECON ]</h3>
+        <label class="check-item"><input type="checkbox" id="c1"><span>Located the exported <code>.vhd</code></span></label>
+        <label class="check-item"><input type="checkbox" id="c2"><span>Swept for <code>.avhd</code>/<code>.avhdx</code> checkpoint files</span></label>
+        <label class="check-item"><input type="checkbox" id="c3"><span>Original VHD backed up &amp; untouched</span></label>
+        <label class="check-item"><input type="checkbox" id="c4"><span>Determined Generation 1 vs Generation 2</span></label>
+        <label class="check-item"><input type="checkbox" id="c5"><span>Source VM powered off during conversion</span></label>
+      </div>
+      <div class="check-col reveal" style="--gc:var(--green)">
+        <h3>[ PATH_A :: VIRTUALBOX ]</h3>
+        <label class="check-item"><input type="checkbox" id="c6"><span>VBoxManage.exe located &amp; version-tested</span></label>
+        <label class="check-item"><input type="checkbox" id="c7"><span>Source VHD path verified (Test-Path = True)</span></label>
+        <label class="check-item"><input type="checkbox" id="c8"><span>Converted <code>.vhd → .vdi</code> (clone medium)</span></label>
+        <label class="check-item"><input type="checkbox" id="c9"><span><code>.vdi</code> existence &amp; size verified</span></label>
+        <label class="check-item"><input type="checkbox" id="c10"><span>VM created — correct OS type/version</span></label>
+        <label class="check-item"><input type="checkbox" id="c11"><span>RAM + CPU mirrored from Hyper-V</span></label>
+        <label class="check-item"><input type="checkbox" id="c12"><span><code>.vdi</code> attached to storage controller</span></label>
+        <label class="check-item"><input type="checkbox" id="c13"><span>EFI enabled iff Gen 2 / UEFI</span></label>
+        <label class="check-item"><input type="checkbox" id="c14"><span>Network set to NAT</span></label>
+        <label class="check-item"><input type="checkbox" id="c15"><span>Specimen boots in VirtualBox ✓</span></label>
+      </div>
+      <div class="check-col reveal" style="--gc:var(--cyan)">
+        <h3 style="color:var(--cyan)">[ PATH_B :: VMWARE ]</h3>
+        <label class="check-item"><input type="checkbox" id="c16"><span>qemu-img.exe deployed &amp; version-tested</span></label>
+        <label class="check-item"><input type="checkbox" id="c17"><span>Source disk inspected (qemu-img info)</span></label>
+        <label class="check-item"><input type="checkbox" id="c18"><span>Converted <code>.vhd → .vmdk</code> (-f vpc -O vmdk)</span></label>
+        <label class="check-item"><input type="checkbox" id="c19"><span>VMDK verified (qemu-img info)</span></label>
+        <label class="check-item"><input type="checkbox" id="c20"><span>New VM → Custom → "install OS later"</span></label>
+        <label class="check-item"><input type="checkbox" id="c21"><span>Correct guest OS + bitness selected</span></label>
+        <label class="check-item"><input type="checkbox" id="c22"><span>CPU / RAM mirrored; network NAT</span></label>
+        <label class="check-item"><input type="checkbox" id="c23"><span>Existing VMDK attached, format kept</span></label>
+        <label class="check-item"><input type="checkbox" id="c24"><span>Firmware set (Gen 1 BIOS / Gen 2 UEFI)</span></label>
+        <label class="check-item"><input type="checkbox" id="c25"><span>Specimen boots in VMware ✓</span></label>
+        <label class="check-item"><input type="checkbox" id="c26"><span>VMware Tools installed + rebooted</span></label>
+      </div>
+      <div class="check-col reveal" style="--gc:var(--red)">
+        <h3 style="color:var(--red)">[ PHASE 05 :: SIGN-OFF ]</h3>
+        <label class="check-item"><input type="checkbox" id="c27"><span>Applications &amp; files verified inside the guest</span></label>
+        <label class="check-item"><input type="checkbox" id="c28"><span>Network connectivity verified</span></label>
+        <label class="check-item"><input type="checkbox" id="c29"><span>Windows activation state checked</span></label>
+        <label class="check-item"><input type="checkbox" id="c30"><span>Original Hyper-V export still archived <span class="mut">(delete only after all of the above)</span></span></label>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap foot-grid">
+    <div class="foot-ascii">
+   _____                _____
+  /     \              /     \
+ | () () |            | (o)(o)|
+  \  ^  /     ☣        \  ^  /
+  |||||||   SPECIMEN    |||||||
+  |||||||   CONTAINED   |||||||
+ /-------\            /-------\</div>
+    <div class="foot-note">
+      <b>STANDING ORDER:</b> The original Hyper-V export, the converted disk, and the working sandbox VM
+      coexist until both environments are proven. Only when Windows boots, files are intact, networking works
+      and services respond — in <em>both</em> sandboxes — may the source archive be retired.<br><br>
+      Compiled for the <strong style="color:var(--green)">Malware Analysis</strong> course lab ·
+      Sources: Oracle VirtualBox documentation, Broadcom/VMware Workstation documentation,
+      Microsoft Learn (Hyper-V export &amp; generations), QEMU qemu-img reference.<br><br>
+      <span style="color:var(--green-dim)">☣ SANDBOX DISCIPLINE SAVES LIVES. ☣</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= STATUS BAR ================= -->
+<div class="statusbar">
+  <span><span class="led"></span>SANDBOX-07 :: <span class="ok">ONLINE</span></span>
+  <span class="mid">SPECIMEN: abcd2.vhd :: <span class="ok">CONTAINED</span> &nbsp;|&nbsp; PATHS: <span class="ok">VBOX</span> / <span style="color:var(--cyan)">VMWARE</span></span>
+  <span class="clock" id="clock">--:--:--</span>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- MATRIX RAIN ---------- */
+var cv = document.getElementById('matrix');
+if (!reduced && cv) {
+  var ctx = cv.getContext('2d');
+  var chars = '01アイウエオカキクケコサシスセソタチツテト<>[]{}#$%&@!?/\\|=+*';
+  var cols, drops = [];
+  function sizeMatrix(){
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    cols = Math.floor(cv.width / 16);
+    drops = []; for (var i=0;i<cols;i++) drops.push(Math.floor(Math.random()*-60));
+  }
+  sizeMatrix(); window.addEventListener('resize', sizeMatrix);
+  (function draw(){
+    ctx.fillStyle = 'rgba(4,7,4,0.10)';
+    ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.font = '14px "Share Tech Mono", monospace';
+    for (var i=0;i<drops.length;i++){
+      var ch = chars[Math.floor(Math.random()*chars.length)];
+      ctx.fillStyle = Math.random() > 0.975 ? '#baffc9' : '#00c43a';
+      ctx.fillText(ch, i*16, drops[i]*16);
+      if (drops[i]*16 > cv.height && Math.random() > 0.985) drops[i]=0;
+      drops[i]++;
+    }
+    requestAnimationFrame(draw);
+  })();
+}
+
+/* ---------- TYPED BOOT SEQUENCE ---------- */
+var bootLines = [
+  {t:'> HYPER-V EXPORT DETECTED .................. OK', c:''},
+  {t:'> MOUNT: Virtual Hard Disks\\ ............... 1 PAYLOAD FOUND', c:''},
+  {t:'> SCAN: .avhd / .avhdx checkpoint chain ...... CLEAR', c:''},
+  {t:'> RUNTIME [A] ORACLE VIRTUALBOX ............ READY', c:''},
+  {t:'> RUNTIME [B] VMWARE WORKSTATION ........... READY', c:''},
+  {t:'> MODULES: VBoxManage.exe | qemu-img.exe ... LOADED', c:''},
+  {t:'> TARGET FIRMWARE PROFILE .................. GEN2/UEFI', c:'warn'},
+  {t:'> AWAITING OPERATOR INPUT', c:'dim', cursor:true}
+];
+var bootEl = document.getElementById('boot-type');
+if (bootEl) {
+  if (reduced) {
+    bootLines.forEach(function(l){
+      var s = document.createElement('span');
+      s.className = 'type-line ' + l.c;
+      s.textContent = l.t + (l.cursor ? ' ▮' : '');
+      bootEl.appendChild(s);
+    });
+  } else {
+    var li = 0;
+    function typeLine(){
+      if (li >= bootLines.length) return;
+      var line = bootLines[li], s = document.createElement('span');
+      s.className = 'type-line ' + line.c;
+      bootEl.appendChild(s);
+      var ci = 0;
+      var cur = document.createElement('span'); cur.className='cursor';
+      s.appendChild(cur);
+      (function tick(){
+        if (ci <= line.t.length){
+          s.firstChild ? s.insertBefore(document.createTextNode(line.t[ci-1]||''), cur) : null;
+          if (ci>0 && !s._init){ s._init=1; }
+          ci++;
+          setTimeout(tick, 14 + Math.random()*22);
+        } else {
+          if (!line.cursor) s.removeChild(cur);
+          li++; setTimeout(typeLine, 260);
+        }
+      })();
+    }
+    setTimeout(typeLine, 500);
+  }
+}
+
+/* ---------- TICKER (duplicate for seamless loop) ---------- */
+var tk = document.getElementById('ticker-track');
+if (tk) tk.innerHTML += tk.innerHTML;
+
+/* ---------- SCROLL PROGRESS ---------- */
+var bar = document.getElementById('scrollbar');
+window.addEventListener('scroll', function(){
+  var h = document.documentElement;
+  var p = h.scrollTop / (h.scrollHeight - h.clientHeight) * 100;
+  bar.style.width = p + '%';
+}, {passive:true});
+
+/* ---------- SCRAMBLE-DECODE HEADINGS ---------- */
+var glyphs = '!<>-_\\/[]{}—=+*^?#01';
+function scramble(el){
+  var final = el.dataset.text || el.textContent;
+  if (reduced){ el.textContent = final; return; }
+  var frame = 0, total = Math.max(14, final.length);
+  var iv = setInterval(function(){
+    var out = '';
+    for (var i=0;i<final.length;i++){
+      if (final[i]===' ') { out+=' '; continue; }
+      out += (i < (frame/total)*final.length*1.4) ? final[i]
+           : glyphs[Math.floor(Math.random()*glyphs.length)];
+    }
+    el.textContent = out;
+    frame++;
+    if (frame > total*1.6){ clearInterval(iv); el.innerHTML = final.replace(/<em>/g,'<em>').replace(/<\/em>/g,'</em>'); }
+  }, 30);
+}
+/* keep em-highlight: store html, scramble plain, restore at end */
+document.querySelectorAll('h2.scramble').forEach(function(h){
+  h.dataset.html = h.innerHTML;
+  h.dataset.text = h.textContent;
+});
+/* override scramble end to restore rich html */
+var _orig = scramble;
+scramble = function(el){
+  var finalText = el.dataset.text;
+  var html = el.dataset.html;
+  if (reduced){ el.innerHTML = html; return; }
+  var frame = 0, total = Math.max(14, finalText.length);
+  var iv = setInterval(function(){
+    var out='';
+    for (var i=0;i<finalText.length;i++){
+      if (finalText[i]===' '){ out+=' '; continue; }
+      out += (i < (frame/total)*finalText.length*1.4) ? finalText[i] : glyphs[Math.floor(Math.random()*glyphs.length)];
+    }
+    el.textContent = out;
+    frame++;
+    if (frame > total*1.6){ clearInterval(iv); el.innerHTML = html; }
+  }, 30);
+};
+
+/* ---------- REVEAL ON SCROLL ---------- */
+var io = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if (e.isIntersecting){
+      e.target.classList.add('visible');
+      if (e.target.matches('h2.scramble') && !e.target.dataset.done){
+        e.target.dataset.done = 1; scramble(e.target);
+      }
+      io.unobserve(e.target);
+    }
+  });
+}, {threshold:.12});
+document.querySelectorAll('.reveal, h2.scramble').forEach(function(el){ io.observe(el); });
+
+/* ---------- PATH TABS ---------- */
+window.showPath = function(which){
+  document.querySelectorAll('.path-tab').forEach(function(t){
+    var on = t.dataset.path === which;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on);
+  });
+  document.querySelectorAll('.path-panel').forEach(function(p){
+    p.classList.toggle('active', p.id === 'path-' + which);
+  });
+};
+
+/* ---------- COPY BUTTONS ---------- */
+document.querySelectorAll('.copy-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var block = btn.closest('.codeblock');
+    var cmd = block.querySelector('.cmd');
+    var text = cmd ? cmd.innerText : block.querySelector('pre').innerText;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+      .catch(function(){
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); ta.remove();
+      })
+      .finally(function(){
+        var old = btn.textContent;
+        btn.textContent = '[ COPIED ✓ ]'; btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = old; btn.classList.remove('done'); }, 1600);
+      });
+  });
+});
+
+/* ---------- CHECKLIST + PROGRESS ---------- */
+var boxes = Array.prototype.slice.call(document.querySelectorAll('.check-item input'));
+var fill = document.getElementById('prog-fill');
+var label = document.getElementById('prog-label');
+var KEY = 'specimen-transfer-checklist-v1';
+var saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){}
+boxes.forEach(function(b){
+  if (saved[b.id]) b.checked = true;
+  b.addEventListener('change', function(){
+    saved[b.id] = b.checked;
+    try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch(e){}
+    updateProgress();
+  });
+});
+function updateProgress(){
+  var done = boxes.filter(function(b){ return b.checked; }).length;
+  var pct = Math.round(done / boxes.length * 100);
+  fill.style.width = pct + '%';
+  label.textContent = done + ' / ' + boxes.length + ' :: ' + pct + '%';
+  label.style.color = pct === 100 ? 'var(--green)' : '';
+}
+updateProgress();
+
+/* ---------- STATUS BAR CLOCK ---------- */
+var clock = document.getElementById('clock');
+function tickClock(){
+  var d = new Date();
+  function z(n){ return (n<10?'0':'')+n; }
+  clock.textContent = d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '
+                    + z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds())+' LOCAL';
+}
+tickClock(); setInterval(tickClock, 1000);
+})();
+</script>
+</body>
+</html>

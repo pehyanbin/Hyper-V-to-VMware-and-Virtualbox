@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hyper-V → VMware & VirtualBox | Malware Analysis Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+        /* ── reset & base ── */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0b0e14;
+            --bg-card: #111820;
+            --bg-terminal: #0a0f12;
+            --border: #1a2a3a;
+            --green: #00ff41;
+            --green-dim: #00cc33;
+            --cyan: #00ccff;
+            --cyan-dim: #0099cc;
+            --red: #ff3355;
+            --amber: #ffaa33;
+            --gray: #8899aa;
+            --text: #c8d8e8;
+            --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+            --font-display: 'Orbitron', 'Segoe UI', sans-serif;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-mono);
+            line-height: 1.7;
+            padding: 1.5rem;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ── animated background grid ── */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── glitch line ── */
+        .glitch-line {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--green), var(--cyan), var(--green), transparent);
+            opacity: 0.15;
+            z-index: 1;
+            animation: glitchPulse 4s ease-in-out infinite;
+        }
+        @keyframes glitchPulse {
+            0%,
+            100% {
+                opacity: 0.05;
+                transform: translateY(0);
+            }
+            50% {
+                opacity: 0.25;
+                transform: translateY(2px);
+            }
+        }
+
+        /* ── container ── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ── header ── */
+        .header {
+            text-align: center;
+            padding: 3rem 1rem 2rem;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 2.5rem;
+            position: relative;
+        }
+        .header::after {
+            content: '◈ ◈ ◈';
+            display: block;
+            color: var(--green-dim);
+            font-size: 0.8rem;
+            letter-spacing: 1.5rem;
+            margin-top: 0.75rem;
+            opacity: 0.4;
+        }
+        .header h1 {
+            font-family: var(--font-display);
+            font-size: 2.6rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--green), var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(0, 255, 65, 0.15);
+            letter-spacing: 2px;
+        }
+        .header .sub {
+            font-size: 1rem;
+            color: var(--gray);
+            margin-top: 0.3rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+        .header .badge {
+            display: inline-block;
+            margin-top: 0.8rem;
+            padding: 0.2rem 1.2rem;
+            border: 1px solid var(--green-dim);
+            color: var(--green);
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            background: rgba(0, 255, 65, 0.05);
+            border-radius: 2px;
+        }
+
+        /* ── nav tabs ── */
+        .nav-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 2rem 0 2.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+        .nav-tabs a {
+            color: var(--gray);
+            text-decoration: none;
+            padding: 0.4rem 1.2rem;
+            border: 1px solid transparent;
+            border-radius: 2px;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .nav-tabs a:hover {
+            color: var(--green);
+            border-color: var(--green-dim);
+            background: rgba(0, 255, 65, 0.05);
+        }
+        .nav-tabs a.active {
+            color: var(--green);
+            border-color: var(--green-dim);
+            background: rgba(0, 255, 65, 0.08);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.05);
+        }
+
+        /* ── cards / sections ── */
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 2rem 2.2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.3s;
+            position: relative;
+        }
+        .section:hover {
+            border-color: rgba(0, 255, 65, 0.15);
+        }
+        .section::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 2rem;
+            right: 2rem;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--green-dim), transparent);
+            opacity: 0.2;
+        }
+
+        .section h2 {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            color: var(--green);
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            letter-spacing: 1px;
+        }
+        .section h2 .num {
+            display: inline-block;
+            background: rgba(0, 255, 65, 0.08);
+            border: 1px solid var(--green-dim);
+            border-radius: 50%;
+            width: 2.2rem;
+            height: 2.2rem;
+            text-align: center;
+            line-height: 2.2rem;
+            font-size: 0.9rem;
+            color: var(--green);
+            flex-shrink: 0;
+        }
+        .section h3 {
+            font-size: 1.05rem;
+            color: var(--cyan);
+            margin: 1.5rem 0 0.6rem;
+            letter-spacing: 0.5px;
+        }
+        .section h3:first-of-type {
+            margin-top: 0;
+        }
+        .section p {
+            margin-bottom: 0.8rem;
+            color: var(--text);
+        }
+        .section ul,
+        .section ol {
+            margin: 0.6rem 0 1rem 1.8rem;
+            color: var(--text);
+        }
+        .section li {
+            margin-bottom: 0.3rem;
+        }
+        .section code,
+        .section .cmd {
+            background: var(--bg-terminal);
+            color: var(--green);
+            padding: 0.15rem 0.6rem;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            border: 1px solid #1a2a2a;
+            font-family: var(--font-mono);
+            word-break: break-all;
+        }
+        .section .cmd-block {
+            display: block;
+            background: var(--bg-terminal);
+            border: 1px solid #1a2a2a;
+            border-left: 3px solid var(--green-dim);
+            padding: 1rem 1.2rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--green);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .section .cmd-block .comment {
+            color: var(--gray);
+            font-style: italic;
+        }
+        .section .cmd-block .highlight {
+            color: var(--cyan);
+        }
+        .section .note {
+            background: rgba(0, 204, 255, 0.04);
+            border-left: 3px solid var(--cyan);
+            padding: 0.8rem 1.2rem;
+            margin: 1rem 0;
+            border-radius: 2px;
+            font-size: 0.9rem;
+        }
+        .section .warning {
+            background: rgba(255, 51, 85, 0.06);
+            border-left: 3px solid var(--red);
+            padding: 0.8rem 1.2rem;
+            margin: 1rem 0;
+            border-radius: 2px;
+            font-size: 0.9rem;
+            color: #ff8899;
+        }
+        .section .success {
+            background: rgba(0, 255, 65, 0.04);
+            border-left: 3px solid var(--green);
+            padding: 0.8rem 1.2rem;
+            margin: 1rem 0;
+            border-radius: 2px;
+            font-size: 0.9rem;
+            color: var(--green);
+        }
+        .section .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+        @media (max-width: 700px) {
+            .section .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .section {
+                padding: 1.2rem;
+            }
+            .header h1 {
+                font-size: 1.6rem;
+            }
+            .nav-tabs a {
+                font-size: 0.65rem;
+                padding: 0.2rem 0.8rem;
+            }
+        }
+
+        /* ── badge / pill ── */
+        .pill {
+            display: inline-block;
+            padding: 0.05rem 0.8rem;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(0, 255, 65, 0.08);
+            border: 1px solid var(--green-dim);
+            color: var(--green);
+            margin-right: 0.4rem;
+        }
+        .pill.vbox {
+            border-color: var(--cyan);
+            color: var(--cyan);
+            background: rgba(0, 204, 255, 0.06);
+        }
+        .pill.vmware {
+            border-color: var(--amber);
+            color: var(--amber);
+            background: rgba(255, 170, 51, 0.06);
+        }
+
+        /* ── divider ── */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 3rem 0 2rem;
+            color: var(--gray);
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        /* ── scanner animation ── */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--green), transparent);
+            opacity: 0.03;
+            z-index: 1;
+            pointer-events: none;
+            animation: scan 8s linear infinite;
+        }
+        @keyframes scan {
+            0% {
+                top: 0;
+                opacity: 0.02;
+            }
+            50% {
+                opacity: 0.08;
+            }
+            100% {
+                top: 100%;
+                opacity: 0.02;
+            }
+        }
+
+        /* ── footer ── */
+        .footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            border-top: 1px solid var(--border);
+            margin-top: 3rem;
+            font-size: 0.7rem;
+            color: var(--gray);
+            letter-spacing: 2px;
+        }
+        .footer .glow {
+            color: var(--green-dim);
+            opacity: 0.5;
+        }
+
+        /* ── toc ── */
+        .toc {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem 1.2rem;
+            background: var(--bg-terminal);
+            border: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+        }
+        .toc a {
+            color: var(--gray);
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            transition: color 0.2s;
+        }
+        .toc a:hover {
+            color: var(--green);
+        }
+        .toc .sep {
+            color: var(--border);
+        }
+
+        /* scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            background: var(--bg);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--green-dim);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ambient effects -->
+    <div class="glitch-line"></div>
+    <div class="scanline"></div>
+
+    <div class="container">
+
+        <!-- HEADER -->
+        <header class="header">
+            <h1>⧩ HYPER-V → VMWARE &amp; VIRTUALBOX</h1>
+            <div class="sub">malware analysis lab · migration playbook</div>
+            <div class="badge">⚡ offline · no cloud · 100% static</div>
+        </header>
+
+        <!-- TOC -->
+        <nav class="toc">
+            <a href="#overview">overview</a>
+            <span class="sep">|</span>
+            <a href="#vbox">virtualbox</a>
+            <span class="sep">|</span>
+            <a href="#vmware">vmware</a>
+            <span class="sep">|</span>
+            <a href="#troubleshoot">troubleshoot</a>
+            <span class="sep">|</span>
+            <a href="#checklist">checklist</a>
+        </nav>
+
+        <!-- ============================================================ -->
+        <!-- OVERVIEW -->
+        <!-- ============================================================ -->
+        <section class="section" id="overview">
+            <h2><span class="num">⌘</span> Overview</h2>
+            <p>
+                You have a Hyper-V VM exported as a <code>.vhd</code> disk. This guide walks you through
+                <span style="color:var(--cyan);">two separate migrations</span>:
+            </p>
+            <ul>
+                <li><span class="pill vbox">VirtualBox</span> convert <code>.vhd → .vdi</code> using <code>VBoxManage</code></li>
+                <li><span class="pill vmware">VMware</span> convert <code>.vhd → .vmdk</code> using <code>qemu-img</code></li>
+            </ul>
+            <p>
+                <strong style="color:var(--green);">Core principle:</strong> You are <em>not</em> importing the Hyper-V configuration.
+                You are reusing the virtual disk and building a fresh VM configuration around it.
+            </p>
+            <div class="note">
+                <strong>⏺ Hyper-V export structure:</strong><br />
+                <code>MyVM\Virtual Hard Disks\MyVM.vhd</code> &nbsp;← this is what you need.<br />
+                <code>.vmcx</code>, <code>.vmgs</code>, <code>.avhd</code> &nbsp;← Hyper-V specific; ignore or backup.
+            </div>
+            <div class="warning">
+                <strong>⚠ If you see .avhd or .avhdx files</strong> — those are checkpoint differencing disks.
+                <strong>Do not convert blindly.</strong> Identify the disk chain first (see Part 2 in each section).
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- VIRTUALBOX SECTION -->
+        <!-- ============================================================ -->
+        <div class="divider">◈ virtualbox migration ◈</div>
+
+        <section class="section" id="vbox">
+            <h2><span class="num">01</span> VirtualBox — VHD → VDI</h2>
+
+            <h3>Part 1 — What you have</h3>
+            <p>
+                Your Hyper-V export contains a <code>.vhd</code> file inside <code>Virtual Hard Disks\</code>.
+                That is the disk you will convert. The other files (<code>.vmcx</code>, <code>.vmgs</code>) are not used.
+            </p>
+
+            <h3>Part 2 — Check for checkpoints</h3>
+            <p>Look inside <code>Snapshots\</code> and <code>Virtual Hard Disks\</code> for:</p>
+            <ul>
+                <li><code>MyVM.vhd</code> → good, continue</li>
+                <li><code>MyVM.avhd</code> or <code>.avhdx</code> → <span style="color:var(--red);">stop</span>; you have a checkpoint chain.</li>
+            </ul>
+            <div class="warning">
+                If you have <code>.avhd</code> files, <strong>do not convert</strong> the base <code>.vhd</code> alone.
+                You may get an older state. Identify the current disk first.
+            </div>
+
+            <h3>Part 3 — Backup your VHD</h3>
+            <p>
+                <strong>Do not modify the original.</strong> Copy it to a working directory.
+            </p>
+            <div class="cmd-block">
+                # example backup
+                Copy-Item "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" "D:\Backup\MyVM.vhd"
+            </div>
+
+            <h3>Part 4 — Check VirtualBox installation</h3>
+            <p>
+                <code>VBoxManage.exe</code> should be at:<br />
+                <code>C:\Program Files\Oracle\VirtualBox\VBoxManage.exe</code>
+            </p>
+            <p>If it's missing, <strong>repair/reinstall</strong> VirtualBox from the official Oracle installer.</p>
+
+            <h3>Part 5 — Test VBoxManage</h3>
+            <div class="cmd-block">
+                &amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version
+            </div>
+            <p>Expected output: <code>7.1.x</code> or similar.</p>
+
+            <h3>Part 6 — Convert VHD → VDI</h3>
+            <div class="cmd-block">
+                &amp; "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clonemedium disk \
+                "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" \
+                "D:\VirtualBox\MyVM\MyVM.vdi" --format VDI
+            </div>
+            <p>
+                <span class="pill">source</span> <code>...\MyVM.vhd</code><br />
+                <span class="pill">dest</span> <code>...\MyVM.vdi</code><br />
+                <span class="pill">format</span> <code>VDI</code> (VirtualBox native)
+            </p>
+            <div class="note">
+                <strong>Quotation marks matter.</strong> Paths contain spaces (<code>Virtual Hard Disks</code>).
+                Quotes ensure the entire path is treated as one argument.
+            </div>
+
+            <h3>Part 7 — Verify the VDI</h3>
+            <div class="cmd-block">
+                Test-Path "D:\VirtualBox\MyVM\MyVM.vdi"          # should return True
+                Get-Item "D:\VirtualBox\MyVM\MyVM.vdi" | Select-Object Name, Length
+            </div>
+
+            <h3>Part 8 — Create a new VM in VirtualBox</h3>
+            <ol>
+                <li>Open VirtualBox → <strong>New</strong></li>
+                <li>Name: <code>MyVM</code> (or similar)</li>
+                <li>Type: <code>Microsoft Windows</code> / Version: <code>Windows 11 (64-bit)</code> (adjust to your OS)</li>
+                <li>RAM: match Hyper-V (e.g. 4096 MB or 8192 MB)</li>
+                <li>CPU: match Hyper-V (e.g. 4 cores)</li>
+                <li>Hard disk: <strong>Use an existing virtual hard disk file</strong> → select your <code>.vdi</code></li>
+            </ol>
+
+            <h3>Part 9 — UEFI / Generation 2</h3>
+            <p>
+                If the original Hyper-V VM was <strong>Generation 2</strong> (UEFI), enable:
+            </p>
+            <div class="cmd-block">
+                Settings → System → Motherboard → <span class="highlight">Enable EFI</span> (check)
+            </div>
+            <div class="warning">
+                Without EFI, you may see <em>"No bootable medium found"</em> even though the disk is fine.
+            </div>
+
+            <h3>Part 10 — Attach VDI (if not already)</h3>
+            <ol>
+                <li>Select VM → <strong>Settings</strong></li>
+                <li><strong>Storage</strong> → select the storage controller</li>
+                <li><strong>Add Hard Disk</strong> → <strong>Choose Existing Disk</strong> → select your <code>.vdi</code></li>
+            </ol>
+
+            <h3>Part 11 — Networking</h3>
+            <p>Start with <strong>NAT</strong> for simple internet access. Later switch to <strong>Bridged</strong> if needed.</p>
+
+            <h3>Part 12 — Boot</h3>
+            <p>Click <strong>Start</strong>. The first boot may take longer as Windows detects new virtual hardware.</p>
+
+            <div class="success">
+                <strong>✓ If Windows boots</strong> — migration complete. Keep the original <code>.vhd</code> as backup.
+            </div>
+
+            <div class="warning">
+                <strong>✗ "No bootable medium found"</strong> → check EFI is enabled, VDI is attached, and boot order has Hard Disk first.
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- VMWARE SECTION -->
+        <!-- ============================================================ -->
+        <div class="divider">◈ vmware migration ◈</div>
+
+        <section class="section" id="vmware">
+            <h2><span class="num">02</span> VMware — VHD → VMDK</h2>
+
+            <h3>Part 1 — Understand your export</h3>
+            <p>
+                Same as before: the <code>.vhd</code> inside <code>Virtual Hard Disks\</code> is your source disk.
+                VMware cannot use Hyper-V's <code>.vmcx</code> configuration.
+            </p>
+
+            <h3>Part 2 — Check for checkpoints</h3>
+            <p>Look for <code>.avhd</code> or <code>.avhdx</code> files. If present, identify the disk chain first.</p>
+            <div class="note">
+                <strong>Example:</strong> <code>abcd2.vhd</code> + <code>abcd2-checkpoint1.avhd</code><br />
+                Converting only <code>abcd2.vhd</code> may give you an older state.
+            </div>
+
+            <h3>Part 3 — Backup</h3>
+            <div class="cmd-block">
+                Copy-Item "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd" "D:\HyperV-Backup\abcd2.vhd"
+            </div>
+
+            <h3>Part 4 — Install QEMU</h3>
+            <p>
+                Download <code>qemu-img.exe</code> from <a href="https://cloudbase.it/qemu-img-windows/" target="_blank" style="color:var(--cyan);">cloudbase.it</a>
+                or use a package manager. Place it in <code>C:\Program Files\qemu\</code> or a folder in your <code>PATH</code>.
+            </p>
+
+            <h3>Part 5 — Test QEMU</h3>
+            <div class="cmd-block">
+                "C:\Program Files\qemu\qemu-img.exe" --version
+            </div>
+
+            <h3>Part 6 — Inspect the VHD</h3>
+            <div class="cmd-block">
+                "C:\Program Files\qemu\qemu-img.exe" info "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd"
+            </div>
+            <p>You should see: <code>file format: vpc</code> and the virtual size.</p>
+
+            <h3>Part 7 — Convert VHD → VMDK</h3>
+            <div class="cmd-block">
+                "C:\Program Files\qemu\qemu-img.exe" convert -p -f vpc -O vmdk \
+                "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd" \
+                "D:\VMware\abcd2\abcd2_vmware.vmdk"
+            </div>
+            <p>
+                <span class="pill">-f vpc</span> input format (VHD)<br />
+                <span class="pill">-O vmdk</span> output format (VMDK)<br />
+                <span class="pill">-p</span> show progress
+            </p>
+            <div class="note">
+                Wait for <code>100%</code> — conversion time depends on disk size and storage speed.
+            </div>
+
+            <h3>Part 8 — Verify the VMDK</h3>
+            <div class="cmd-block">
+                "C:\Program Files\qemu\qemu-img.exe" info "D:\VMware\abcd2\abcd2_vmware.vmdk"
+            </div>
+            <p>Expected: <code>file format: vmdk</code></p>
+
+            <h3>Part 9 — Create VMware VM</h3>
+            <p><strong style="color:var(--red);">Do not double-click the .vmdk.</strong> Instead:</p>
+            <ol>
+                <li>Open <strong>VMware Workstation</strong></li>
+                <li><strong>File → New Virtual Machine</strong></li>
+                <li>Select <strong>Custom (advanced)</strong> → Next</li>
+                <li>Hardware compatibility: <strong>default / recommended</strong></li>
+                <li><strong>I will install the operating system later</strong> → Next</li>
+                <li>Guest OS: <strong>Microsoft Windows</strong> → select your version (e.g. Windows 11 x64)</li>
+                <li>Name: <code>abcd2_vmware</code> → Location: <code>D:\VMware\abcd2\</code></li>
+                <li>CPU / RAM: match Hyper-V (e.g. 4 cores, 8192 MB)</li>
+                <li>Network: <strong>NAT</strong> (for first boot)</li>
+                <li><strong>Use an existing virtual disk</strong> → browse to your <code>.vmdk</code></li>
+                <li><strong>Keep Existing Format</strong> (do not convert)</li>
+                <li>Finish</li>
+            </ol>
+
+            <h3>Part 10 — Firmware: BIOS vs UEFI</h3>
+            <p>
+                Go to <strong>VM → Settings → Options → Advanced</strong> → <strong>Firmware type</strong>
+            </p>
+            <ul>
+                <li>Hyper-V Gen 1 → <strong>BIOS</strong></li>
+                <li>Hyper-V Gen 2 → <strong>UEFI</strong></li>
+            </ul>
+            <div class="warning">
+                Wrong firmware = <em>"Operating System not found"</em> or no boot manager.
+            </div>
+
+            <h3>Part 11 — Secure Boot</h3>
+            <p>
+                If your Gen 2 VM used Secure Boot, you may need to configure it in VMware.
+                For first boot, try without Secure Boot, then enable if needed.
+            </p>
+
+            <h3>Part 12 — Boot order</h3>
+            <p>
+                <strong>VM → Settings → Options → Advanced → Boot Options</strong><br />
+                Ensure <strong>Hard Disk</strong> is at the top.
+            </p>
+
+            <h3>Part 13 — First boot</h3>
+            <p>Click <strong>Power On</strong>. Be patient — Windows detects new virtual hardware.</p>
+
+            <div class="success">
+                <strong>✓ Windows boots</strong> — great! Let it finish device detection.
+            </div>
+
+            <h3>Part 14 — Install VMware Tools</h3>
+            <p>
+                After Windows is running, go to <strong>VM → Install VMware Tools</strong>.
+                Restart after installation.
+            </p>
+
+            <h3>Part 15 — Check Device Manager</h3>
+            <p>
+                <code>Win + X → Device Manager</code> — look for unknown devices.
+                VMware Tools should resolve most drivers.
+            </p>
+
+            <h3>Part 16 — Network check</h3>
+            <p>Run <code>ipconfig</code> in the guest. You should see the VMware virtual adapter.</p>
+
+            <h3>Part 17 — Windows Activation</h3>
+            <p>
+                Hardware changes may trigger reactivation. Have your license key ready.
+            </p>
+
+            <div class="warning">
+                <strong>Keep the original Hyper-V export</strong> until you've verified everything:
+                boot, apps, files, network, services, activation.
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- TROUBLESHOOTING -->
+        <!-- ============================================================ -->
+        <div class="divider">◈ troubleshooting ◈</div>
+
+        <section class="section" id="troubleshoot">
+            <h2><span class="num">⚡</span> Common Issues</h2>
+
+            <div class="grid-2">
+                <div>
+                    <h3 style="color:var(--red);">VirtualBox</h3>
+                    <ul>
+                        <li><strong>"No bootable medium"</strong> → Enable EFI (Settings → System → Motherboard)</li>
+                        <li><strong>VDI inaccessible</strong> → run <code>VBoxManage showmediuminfo "path.vdi"</code></li>
+                        <li><strong>Blue screen</strong> → different storage controller / CPU presentation; try changing the storage controller type in Settings → Storage</li>
+                        <li><strong>VBoxManage not found</strong> → repair/reinstall VirtualBox</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="color:var(--amber);">VMware</h3>
+                    <ul>
+                        <li><strong>"VMDK cannot be opened directly"</strong> → open the <code>.vmx</code> file, not the <code>.vmdk</code></li>
+                        <li><strong>"Operating System not found"</strong> → check BIOS vs UEFI firmware</li>
+                        <li><strong>VM boots but crashes</strong> → check disk controller, firmware, install VMware Tools</li>
+                        <li><strong>QEMU can't read VMDK</strong> → re-run conversion; verify source VHD is not corrupted</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="note">
+                <strong>Golden rule:</strong> Change one setting at a time. Don't toggle EFI, Secure Boot, and disk controller all at once.
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- CHECKLIST -->
+        <!-- ============================================================ -->
+        <section class="section" id="checklist">
+            <h2><span class="num">✓</span> Pre-Flight Checklist</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+                <div>
+                    <h3 style="color:var(--cyan);">Before conversion</h3>
+                    <ul>
+                        <li>☐ Locate the <code>.vhd</code> file</li>
+                        <li>☐ Check for <code>.avhd</code> / <code>.avhdx</code> (checkpoint chain)</li>
+                        <li>☐ Make a backup of the original VHD</li>
+                        <li>☐ Verify VirtualBox installation (<code>VBoxManage.exe</code>)</li>
+                        <li>☐ Install QEMU (<code>qemu-img.exe</code>) for VMware path</li>
+                        <li>☐ Determine Hyper-V Generation (Gen 1 = BIOS, Gen 2 = UEFI)</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="color:var(--green);">After conversion</h3>
+                    <ul>
+                        <li>☐ Verify <code>.vdi</code> or <code>.vmdk</code> exists</li>
+                        <li>☐ Create new VM (do not import Hyper-V config)</li>
+                        <li>☐ Set correct firmware (BIOS / UEFI)</li>
+                        <li>☐ Attach the converted disk</li>
+                        <li>☐ Configure RAM / CPU (match Hyper-V)</li>
+                        <li>☐ Set boot order (Hard Disk first)</li>
+                        <li>☐ First boot → be patient</li>
+                        <li>☐ Install guest tools (VirtualBox Guest Additions / VMware Tools)</li>
+                        <li>☐ Keep original <code>.vhd</code> until fully verified</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- FOOTER -->
+        <!-- ============================================================ -->
+        <footer class="footer">
+            <span class="glow">⧩</span> hyper-v → vmware &amp; virtualbox &nbsp;·&nbsp; malware analysis lab &nbsp;·&nbsp; <span class="glow">⚡</span>
+            <br />
+            <span style="opacity:0.3; font-size:0.6rem;">built for offline use · no tracking · 100% static</span>
+        </footer>
+
+    </div>
+    <!-- /container -->
+
+    <!-- tiny js for smooth anchor and active nav -->
+    <script>
+        (function() {
+            const links = document.querySelectorAll('.toc a');
+            const sections = document.querySelectorAll('.section[id]');
+
+            function setActive() {
+                let current = '';
+                const scrollPos = window.scrollY + 120;
+                sections.forEach(sec => {
+                    const top = sec.offsetTop;
+                    const height = sec.offsetHeight;
+                    if (scrollPos >= top && scrollPos < top + height) {
+                        current = sec.id;
+                    }
+                });
+                links.forEach(a => {
+                    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+                });
+            }
+
+            window.addEventListener('scroll', setActive);
+            window.addEventListener('load', setActive);
+
+            // smooth anchor scroll
+            links.forEach(a => {
+                a.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+        })();
+    </script>
+
+</body>
+</html>

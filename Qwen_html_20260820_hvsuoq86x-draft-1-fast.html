@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROTOCOL: HYPER-V SANDBOX MIGRATION</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --bg-panel: #111511;
+            --green: #00ff41;
+            --cyan: #00e5ff;
+            --red: #ff003c;
+            --yellow: #ffb000;
+            --text: #c0c0c0;
+            --dim: #666;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* CRT Scanline Effect */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Flicker Animation */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            animation: flicker 3s infinite;
+        }
+
+        header {
+            border: 1px solid var(--green);
+            padding: 20px;
+            margin-bottom: 30px;
+            background: rgba(0, 255, 65, 0.05);
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+            position: relative;
+        }
+
+        header::before {
+            content: "[ CLASSIFIED // MALWARE ANALYSIS DIVISION ]";
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: var(--bg-dark);
+            padding: 0 10px;
+            color: var(--red);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+        }
+
+        h1 {
+            color: var(--green);
+            text-shadow: 0 0 10px var(--green);
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: var(--cyan);
+            border-bottom: 1px dashed var(--cyan);
+            padding-bottom: 5px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h3 {
+            color: var(--yellow);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-shadow: 0 0 8px var(--cyan);
+            text-decoration: underline;
+        }
+
+        nav {
+            background: var(--bg-panel);
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        nav a {
+            color: var(--green);
+            font-weight: bold;
+        }
+
+        nav a::before {
+            content: "> ";
+            color: var(--dim);
+        }
+
+        .terminal {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin: 20px 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        .terminal-header {
+            background: #222;
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+
+        .terminal-title {
+            color: var(--dim);
+            font-size: 0.8rem;
+        }
+
+        .terminal-dots {
+            display: flex;
+            gap: 5px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+
+        .terminal-body {
+            padding: 15px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .prompt {
+            color: var(--red);
+            user-select: none;
+        }
+
+        .cmd {
+            color: #fff;
+        }
+
+        .comment {
+            color: var(--dim);
+            font-style: italic;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #222;
+            color: var(--green);
+            border: 1px solid var(--green);
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--green);
+            color: #000;
+        }
+
+        .warning-box {
+            border-left: 4px solid var(--red);
+            background: rgba(255, 0, 60, 0.1);
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .warning-box strong {
+            color: var(--red);
+            text-transform: uppercase;
+        }
+
+        .info-box {
+            border-left: 4px solid var(--cyan);
+            background: rgba(0, 229, 255, 0.05);
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .success-box {
+            border-left: 4px solid var(--green);
+            background: rgba(0, 255, 65, 0.05);
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        ul {
+            list-style-type: none;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        ul li::before {
+            content: "\25B8";
+            color: var(--green);
+            margin-right: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #1a1a1a;
+            color: var(--cyan);
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: var(--dim);
+            font-size: 0.8rem;
+            border-top: 1px solid #333;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>HYPER-V SANDBOX MIGRATION PROTOCOL</h1>
+        <p><span class="blink">_</span> INITIATING SEQUENCE... TARGET ENVIRONMENTS: VIRTUALBOX / VMWARE WORKSTATION</p>
+        <p>OBJECTIVE: Extract isolated virtual machines for dynamic malware analysis and reverse engineering sandboxes.</p>
+    </header>
+
+    <nav>
+        <a href="#phase0">PHASE 0: RECON</a>
+        <a href="#phase1">PHASE 1: VIRTUALBOX</a>
+        <a href="#phase2">PHASE 2: VMWARE</a>
+        <a href="#troubleshoot">ANOMALY RESOLUTION</a>
+    </nav>
+
+    <section id="phase0">
+        <h2>[ PHASE 0 ] RECONNAISSANCE & EXTRACTION</h2>
+        <p>Before migrating the payload environment, we must verify the integrity of the Hyper-V export. A standard Hyper-V export contains virtual disks, configuration files, and potentially checkpoint files.</p>
+        
+        <div class="info-box">
+            <strong>FILE TOPOLOGY:</strong><br>
+            <code>.vmcx</code> / <code>.vmgs</code> / <code>.vmrs</code> = Hyper-V Configuration (IGNORE THESE)<br>
+            <code>.vhd</code> / <code>.vhdx</code> = Base Virtual Hard Disk (TARGET)<br>
+            <code>.avhd</code> / <code>.avhdx</code> = Checkpoint / Differencing Disks (DANGER)
+        </div>
+
+        <h3>STEP 0.1: Verify Checkpoint Chains</h3>
+        <p>Navigate to your export directory. Look inside <code>Virtual Hard Disks\</code> and <code>Snapshots\</code>.</p>
+        
+        <div class="warning-box">
+            <strong>[!] CRITICAL WARNING:</strong> If you see <code>.avhd</code> or <code>.avhdx</code> files, <strong>STOP</strong>. These are differencing disks. Converting only the base <code>.vhd</code> will result in an outdated VM state. You must consolidate the disk chain in Hyper-V before exporting, or seek advanced chain-merging protocols.
+        </div>
+
+        <h3>STEP 0.2: Identify VM Generation</h3>
+        <p>Determine if the source VM is Generation 1 (BIOS) or Generation 2 (UEFI). This dictates the firmware configuration in the target hypervisor.</p>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">Get-VM "Target_VM" | Select-Object Name, Generation, State</span>
+            </div>
+        </div>
+        <table>
+            <tr><th>Hyper-V Gen</th><th>Firmware</th><th>Target Config</th></tr>
+            <tr><td>Generation 1</td><td>BIOS</td><td>Legacy BIOS</td></tr>
+            <tr><td>Generation 2</td><td>UEFI</td><td>EFI / Secure Boot</td></tr>
+        </table>
+        <p><em>Note: Always create a backup of your original <code>.vhd</code> before executing conversion routines.</em></p>
+    </section>
+
+    <section id="phase1">
+        <h2>[ PHASE 1 ] VECTOR A: VIRTUALBOX PROTOCOL</h2>
+        <p>VirtualBox utilizes the <code>.vdi</code> format natively. We will use the <code>VBoxManage</code> CLI utility to clone and convert the disk.</p>
+
+        <h3>STEP 1.1: Verify VBoxManage Presence</h3>
+        <p>Ensure the CLI tool is accessible. If missing, repair the VirtualBox installation via the official Oracle installer.</p>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version</span>
+            </div>
+        </div>
+
+        <h3>STEP 1.2: Execute Disk Conversion</h3>
+        <p>Convert the <code>.vhd</code> to <code>.vdi</code>. Quotation marks are mandatory to handle directory spaces.</p>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe // conversion payload</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clonemedium disk "D:\Hyper-V Export\MyVM\Virtual Hard Disks\MyVM.vhd" "D:\VirtualBox\MyVM\MyVM.vdi" --format VDI</span>
+            </div>
+        </div>
+
+        <h3>STEP 1.3: VirtualBox VM Configuration</h3>
+        <ul>
+            <li>Create <strong>New VM</strong> (Do NOT install a new OS).</li>
+            <li>Allocate RAM/CPU matching the original Hyper-V specs.</li>
+            <li>Storage Controller: Attach existing <code>.vdi</code>.</li>
+            <li>Network: Set to <strong>NAT</strong> for isolated internet access.</li>
+        </ul>
+        
+        <div class="warning-box">
+            <strong>[!] UEFI OVERRIDE:</strong> If the source was Generation 2, navigate to <code>Settings &gt; System &gt; Motherboard</code> and check <strong>Enable EFI</strong>. Failure to do so will result in a "No bootable medium found" error.
+        </div>
+    </section>
+
+    <section id="phase2">
+        <h2>[ PHASE 2 ] VECTOR B: VMWARE WORKSTATION PROTOCOL</h2>
+        <p>VMware utilizes the <code>.vmdk</code> format. We will deploy the <code>qemu-img</code> utility to execute the format translation.</p>
+
+        <h3>STEP 2.1: Deploy QEMU-IMG</h3>
+        <p>Verify the QEMU image converter is in your PATH or execute via absolute path.</p>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">qemu-img.exe --version</span>
+            </div>
+        </div>
+
+        <h3>STEP 2.2: Execute Disk Conversion</h3>
+        <p>Translate <code>vpc</code> (VHD) to <code>vmdk</code>.</p>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe // conversion payload</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">qemu-img.exe convert -p -f vpc -O vmdk "D:\HyperV-Export\Virtual Hard Disks\abcd2.vhd" "D:\VMware\abcd2\abcd2_vmware.vmdk"</span>
+            </div>
+        </div>
+
+        <h3>STEP 2.3: VMware VM Configuration</h3>
+        <div class="warning-box">
+            <strong>[!] FATAL ERROR PREVENTION:</strong> Do NOT double-click the <code>.vmdk</code> file. The <code>.vmdk</code> is just the disk. You must generate a <code>.vmx</code> configuration file via the VMware Wizard.
+        </div>
+        <ul>
+            <li>Open VMware Workstation &rarr; <strong>File &gt; New Virtual Machine</strong>.</li>
+            <li>Select <strong>Custom (advanced)</strong>.</li>
+            <li>Guest OS Installation: <strong>"I will install the operating system later"</strong>.</li>
+            <li>Select the correct Windows Version (x64).</li>
+            <li>Disk Selection: <strong>Use an existing virtual disk</strong> &rarr; Browse to your <code>.vmdk</code>.</li>
+            <li>Format Prompt: Select <strong>Keep Existing Format</strong>.</li>
+        </ul>
+
+        <h3>STEP 2.4: Firmware & Boot Configuration</h3>
+        <p>Navigate to <code>VM &gt; Settings &gt; Options &gt; Advanced</code>.</p>
+        <ul>
+            <li><strong>Gen 1 Source:</strong> Set Firmware type to <strong>BIOS</strong>.</li>
+            <li><strong>Gen 2 Source:</strong> Set Firmware type to <strong>UEFI</strong>. (Check Secure Boot settings if boot fails).</li>
+        </ul>
+        <p>Boot the VM by opening the generated <code>.vmx</code> file. Install <strong>VMware Tools</strong> immediately upon successful OS load to stabilize virtual hardware drivers.</p>
+    </section>
+
+    <section id="troubleshoot">
+        <h2>[ PHASE 3 ] ANOMALY RESOLUTION (TROUBLESHOOTING)</h2>
+        
+        <h3>ANOMALY 01: "No bootable medium found" / "Operating System not found"</h3>
+        <ul>
+            <li><strong>Root Cause:</strong> Firmware mismatch.</li>
+            <li><strong>Fix:</strong> Verify Hyper-V Generation. Gen 2 requires EFI/UEFI enabled in target hypervisor. Gen 1 requires BIOS.</li>
+            <li><strong>Check:</strong> Ensure the virtual disk is first in the Boot Order sequence.</li>
+        </ul>
+
+        <h3>ANOMALY 02: Windows Blue Screen (BSOD) on Boot</h3>
+        <ul>
+            <li><strong>Root Cause:</strong> Hardware abstraction layer (HAL) or storage controller mismatch. The OS is expecting Hyper-V virtual hardware but is encountering VirtualBox/VMware chipsets.</li>
+            <li><strong>Fix:</strong> Allow Windows to attempt self-repair. Check Storage Controller settings (SATA vs NVMe vs SCSI). Do not immediately assume disk corruption.</li>
+        </ul>
+
+        <h3>ANOMALY 03: "VMDK cannot be opened directly"</h3>
+        <ul>
+            <li><strong>Root Cause:</strong> User attempted to execute the virtual disk as a standalone configuration.</li>
+            <li><strong>Fix:</strong> Open VMware Workstation. Use <code>File &gt; Open</code> and select the <code>.vmx</code> file, not the <code>.vmdk</code>.</li>
+        </ul>
+
+        <h3>ANOMALY 04: Inaccessible / Corrupted VDI</h3>
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                <div class="terminal-title">powershell.exe // disk forensics</div>
+            </div>
+            <div class="terminal-body">
+                <button class="copy-btn" onclick="copyCode(this)">[ COPY ]</button>
+                <span class="prompt">PS C:\&gt; </span><span class="cmd">& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showmediuminfo "D:\VirtualBox\MyVM\MyVM.vdi"</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="success-box">
+        <strong>[+] PROTOCOL COMPLETE:</strong> Once the sandbox environment successfully boots and network connectivity (NAT) is verified, the isolated environment is ready for malware detonation and dynamic analysis. <strong>Do not delete the original Hyper-V export</strong> until the sandbox is fully validated and snapshotted.
+    </div>
+
+    <div class="footer">
+        <p>END OF LINE // SANDBOX MIGRATION PROTOCOL v1.0.4</p>
+        <p>UNAUTHORIZED ACCESS TO HOST SYSTEMS IS STRICTLY PROHIBITED</p>
+    </div>
+</div>
+
+<script>
+    function copyCode(btn) {
+        const codeBlock = btn.parentElement.querySelector('.cmd');
+        const text = codeBlock.innerText;
+        
+        navigator.clipboard.writeText(text).then(() => {
+            btn.innerText = '[ COPIED ]';
+            btn.style.color = '#000';
+            btn.style.background = '#00ff41';
+            setTimeout(() => {
+                btn.innerText = '[ COPY ]';
+                btn.style.color = '#00ff41';
+                btn.style.background = '#222';
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
+    }
+
+    // Smooth scrolling for nav links
+    document.querySelectorAll('nav a').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
